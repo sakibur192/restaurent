@@ -1,0 +1,43 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Start free trial</title>
+<link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/css/app.css"></head><body>
+<div class="pub"><div class="auth" style="max-width:560px">
+  <a class="logo" href="/" id="brand"><div class="m">B</div> <span>Baybex Restaurant</span></a>
+  <div class="card">
+    <h2 class="center">Start your free trial</h2>
+    <p class="center muted mt0" id="trial">All features included. No card needed.</p>
+    <form id="f" class="fgrid mt">
+      <label class="f full"><span>Restaurant name <b class="req">*</b></span><input name="name" required placeholder="e.g. Spice House"></label>
+      <label class="f full"><span>Restaurant ID (used to log in) <b class="req">*</b></span><input name="slug" required placeholder="spicehouse" autocapitalize="none"><small id="slugmsg" class="small muted"></small></label>
+      <label class="f"><span>Your name <b class="req">*</b></span><input name="owner_name" required></label>
+      <label class="f"><span>Mobile <b class="req">*</b></span><input name="phone" type="tel" required placeholder="01XXXXXXXXX"></label>
+      <label class="f full"><span>Email</span><input name="email" type="email"></label>
+      <label class="f full"><span>Address</span><input name="address"></label>
+      <label class="f"><span>Owner username <b class="req">*</b></span><input name="username" value="owner" required autocapitalize="none"></label>
+      <label class="f"><span>Password <b class="req">*</b></span><input name="password" type="password" minlength="6" required></label>
+      <label class="f"><span>Quick PIN (4-6 digits, optional)</span><input name="pin" inputmode="numeric" maxlength="6" pattern="\d{4,6}"></label>
+      <label class="check full"><input type="checkbox" name="demo" checked> Add a sample menu, tables and recipes so I can try it right away</label>
+      <button class="btn primary lg block full" id="go">Create my restaurant</button>
+    </form>
+    <p class="center small muted">Already registered? <a href="/login">Log in</a></p>
+  </div>
+</div></div>
+<script src="/js/lib.js"></script>
+<script>
+GET('/api/public/site').then(s => {
+  $('#brand span').textContent = s.brand.name; document.title = 'Start free trial — ' + s.brand.name;
+  if (s.brand.logo_id) $('#brand .m').innerHTML = `<img src="/f/${s.brand.logo_id}" style="width:100%;height:100%;object-fit:cover">`;
+  $('#trial').textContent = `${s.plan.trial_days} days free · All features included · then ${CUR}${s.plan.price}/${s.plan.duration_days === 30 ? 'month' : s.plan.duration_days + ' days'}`;
+  if (!s.signup_enabled) { $('#f').innerHTML = '<div class="alert warn full">New signups are paused right now. Please contact us: ' + esc(s.brand.phone) + '</div>'; }
+});
+const f = $('#f');
+f.name.addEventListener('input', () => { if (!f.slug.dataset.touched) { f.slug.value = f.name.value.toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 30); check(); } });
+f.slug.addEventListener('input', () => { f.slug.dataset.touched = 1; check(); });
+const check = debounce(async () => { const v = f.slug.value.trim(); if (v.length < 3) { $('#slugmsg').textContent = ''; return; }
+  const r = await GET('/api/public/slug-check?slug=' + encodeURIComponent(v)); $('#slugmsg').innerHTML = r.available ? `<span style="color:var(--ok)">✓ ${esc(r.slug)} is available</span>` : `<span style="color:var(--bad)">✗ not available</span>`; }, 350);
+f.onsubmit = async e => {
+  e.preventDefault(); const d = Object.fromEntries(new FormData(f)); d.demo = !!d.demo;
+  $('#go').disabled = true; $('#go').innerHTML = '<span class="spin"></span> Creating…';
+  try { const r = await POST('/api/public/signup', d); localStorage.setItem('bx_slug', r.slug); location.href = '/app#/welcome'; }
+  catch (err) { errToast(err); $('#go').disabled = false; $('#go').textContent = 'Create my restaurant'; }
+};
+</script></body></html>

@@ -1,0 +1,39 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Login</title>
+<link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/css/app.css"></head><body>
+<div class="pub"><div class="auth">
+  <a class="logo" href="/" id="brand"><div class="m">B</div> <span>Baybex Restaurant</span></a>
+  <div class="card">
+    <div class="tabs" style="margin-top:-6px"><button class="on" data-t="pw">Password login</button><button data-t="pin">Quick PIN (staff)</button></div>
+    <label class="f"><span>Restaurant ID</span><input id="slug" placeholder="e.g. spicehouse" autocomplete="organization" autocapitalize="none"></label>
+    <form id="pw">
+      <label class="f"><span>Username</span><input id="u" autocomplete="username" autocapitalize="none"></label>
+      <label class="f"><span>Password</span><input id="p" type="password" autocomplete="current-password"></label>
+      <button class="btn primary lg block" id="go">Log in</button>
+    </form>
+    <div id="pin" style="display:none">
+      <div class="pindots"></div>
+      <div class="pinpad"></div>
+    </div>
+    <p class="center small muted mt">New restaurant? <a href="/signup">Start your free trial</a></p>
+  </div>
+</div></div>
+<script src="/js/lib.js"></script>
+<script>
+const qs = new URLSearchParams(location.search);
+$('#slug').value = qs.get('r') || localStorage.getItem('bx_slug') || '';
+GET('/api/public/site').then(s => { $('#brand span').textContent = s.brand.name; document.title = 'Login — ' + s.brand.name; if (s.brand.logo_id) $('#brand .m').innerHTML = `<img src="/f/${s.brand.logo_id}" style="width:100%;height:100%;object-fit:cover">`; }).catch(() => {});
+$$('.tabs button').forEach(b => b.onclick = () => { $$('.tabs button').forEach(x => x.classList.toggle('on', x === b)); $('#pw').style.display = b.dataset.t === 'pw' ? '' : 'none'; $('#pin').style.display = b.dataset.t === 'pin' ? '' : 'none'; });
+async function login(body) {
+  const slug = $('#slug').value.trim().toLowerCase();
+  if (!slug) { toast('Enter your Restaurant ID', 'err'); $('#slug').focus(); return; }
+  try { await POST('/api/auth/login', Object.assign({ slug }, body), { noRedirect: true }); localStorage.setItem('bx_slug', slug); location.href = '/app'; }
+  catch (e) { errToast(e); pin = ''; draw(); }
+}
+$('#pw').onsubmit = e => { e.preventDefault(); login({ username: $('#u').value.trim(), password: $('#p').value }); };
+let pin = '';
+$('#pin .pindots').innerHTML = '<i></i>'.repeat(6);
+$('#pin .pinpad').innerHTML = [1,2,3,4,5,6,7,8,9,'C',0,'GO'].map(k => `<button type="button" data-k="${k}">${k === 'GO' ? '➜' : k}</button>`).join('');
+const draw = () => $$('#pin .pindots i').forEach((d, i) => d.classList.toggle('f', i < pin.length));
+$$('#pin .pinpad button').forEach(b => b.onclick = () => { const k = b.dataset.k; if (k === 'C') pin = ''; else if (k === 'GO') { if (pin.length >= 4) login({ pin }); return; } else if (pin.length < 6) pin += k; draw(); });
+document.addEventListener('keydown', e => { if ($('#pin').style.display === 'none' || document.activeElement === $('#slug')) return; if (/^\d$/.test(e.key) && pin.length < 6) { pin += e.key; draw(); } else if (e.key === 'Backspace') { pin = pin.slice(0, -1); draw(); } else if (e.key === 'Enter' && pin.length >= 4) login({ pin }); });
+</script></body></html>

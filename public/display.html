@@ -1,0 +1,16 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Customer display</title>
+<link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/css/app.css"><style>body{background:var(--navy);color:#fff}.w{display:grid;grid-template-columns:1.4fr 1fr;height:100vh}.l{padding:4vh 3vw;overflow:auto}.r{background:#fff;color:var(--text);padding:4vh 3vw;display:flex;flex-direction:column;justify-content:center}
+.it{display:flex;justify-content:space-between;font-size:2.6vh;padding:1.2vh 0;border-bottom:1px solid rgba(255,255,255,.12)}.tot{font-size:7vh;font-weight:900;color:var(--brand)}.row2{display:flex;justify-content:space-between;font-size:2.4vh;padding:.6vh 0}
+.wel{display:grid;place-items:center;height:100vh;text-align:center}.wel h1{font-size:6vh}</style></head><body><div id="d"></div>
+<script src="/js/lib.js"></script><script>
+function draw(m) {
+  if (!m || !m.items || !m.items.length) { $('#d').innerHTML = `<div class="wel"><div>${m && m.logo ? `<img src="/f/${m.logo}" style="width:16vh;height:16vh;border-radius:3vh;object-fit:cover">` : ''}<h1>Welcome${m && m.name ? ' to ' + esc(m.name) : ''}!</h1><p style="font-size:2.6vh;color:#cbd5e1">Your order will appear here.</p></div></div>`; return; }
+  CUR = m.currency || '৳'; const t = m.totals;
+  $('#d').innerHTML = `<div class="w"><div class="l"><h2 style="font-size:3.4vh">${esc(m.name)}</h2>${m.items.map(i => `<div class="it"><span>${fmt.num(i.qty, 3)} × ${esc(i.name)}</span><b>${fmt.money(i.total)}</b></div>`).join('')}</div>
+    <div class="r"><div class="row2"><span>Subtotal</span><span>${fmt.money(t.subtotal)}</span></div>${t.itemDisc + t.disc ? `<div class="row2" style="color:var(--ok)"><span>Discount</span><span>-${fmt.money(t.itemDisc + t.disc)}</span></div>` : ''}${t.svc ? `<div class="row2"><span>Service</span><span>${fmt.money(t.svc)}</span></div>` : ''}${t.vat ? `<div class="row2"><span>VAT</span><span>${fmt.money(t.vat)}</span></div>` : ''}${t.del ? `<div class="row2"><span>Delivery</span><span>${fmt.money(t.del)}</span></div>` : ''}
+    <div style="font-size:2.6vh;margin-top:3vh" class="muted">TOTAL TO PAY</div><div class="tot">${fmt.money(t.total)}</div></div></div>`;
+}
+try { new BroadcastChannel('bx-cfd').onmessage = e => draw(e.data); } catch (e) { }
+window.addEventListener('storage', e => { if (e.key === 'bx-cfd') draw(JSON.parse(e.newValue)); });
+draw(JSON.parse(localStorage.getItem('bx-cfd') || 'null'));
+</script></body></html>

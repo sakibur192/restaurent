@@ -1,0 +1,65 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Restaurant Management System</title><meta name="description" content="">
+<link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/css/app.css">
+<style>
+ body{background:#fff}
+ .nav-top{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+ .wrap{max-width:1140px;margin:auto;padding:0 20px}
+ .nav-top .wrap{display:flex;align-items:center;gap:12px;height:64px}
+ .lg{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;color:var(--navy)} .lg .m{width:38px;height:38px;border-radius:11px;background:var(--brand);color:#fff;display:grid;place-items:center;font-weight:900;overflow:hidden}
+ .hero{background:linear-gradient(160deg,var(--navy) 0%,#123a6b 55%,var(--brand) 140%);color:#fff;padding:80px 0 90px;position:relative;overflow:hidden}
+ .hero h1{font-size:clamp(30px,5vw,52px);letter-spacing:-.03em;max-width:760px;margin-bottom:16px}
+ .hero p{font-size:18px;color:#cbd5e1;max-width:640px;margin:0 0 28px}
+ .hero .btn.lg{padding:15px 26px}
+ .hero .mock{position:absolute;right:-60px;top:70px;width:460px;opacity:.95;transform:rotate(-4deg)}
+ @media(max-width:1000px){.hero .mock{display:none}}
+ .mock .card{background:#fff;color:var(--text);padding:14px;border-radius:16px}
+ .sec{padding:70px 0} .sec h2{font-size:32px;letter-spacing:-.02em;text-align:center} .sec .sub{text-align:center;color:var(--muted);max-width:620px;margin:0 auto 36px;font-size:16px}
+ .feat{padding:22px;border:1px solid var(--line);border-radius:16px;background:#fff;transition:.15s} .feat:hover{box-shadow:var(--sh2);transform:translateY(-3px)}
+ .feat .i{font-size:28px;width:52px;height:52px;border-radius:14px;background:var(--brand-l);display:grid;place-items:center;margin-bottom:12px}
+ .price{max-width:520px;margin:auto;border:2px solid var(--brand);border-radius:22px;padding:30px;text-align:center;background:#fff;box-shadow:var(--sh2)}
+ .price .amt{font-size:48px;font-weight:800;color:var(--navy);letter-spacing:-.03em} .price ul{text-align:left;columns:2;padding-left:18px;margin:18px 0;font-size:14px} .price li{margin-bottom:6px}
+ @media(max-width:560px){.price ul{columns:1}}
+ .faq details{border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px;background:#fff} .faq summary{font-weight:700;cursor:pointer}
+ footer{background:var(--navy);color:#94a3b8;padding:36px 0;font-size:14px} footer a{color:#cbd5e1}
+ .ann{background:#fef3c7;color:#78350f;text-align:center;padding:9px;font-weight:600;font-size:13px}
+</style></head><body>
+<div id="ann"></div>
+<div class="nav-top"><div class="wrap"><a class="lg" href="/" id="lg"><div class="m">B</div><span>Baybex Restaurant</span></a><div class="grow"></div>
+  <a class="btn ghost" href="#features">Features</a><a class="btn ghost" href="#pricing">Pricing</a><a class="btn" href="/login">Log in</a><a class="btn primary" href="/signup" id="navcta">Start free</a></div></div>
+<section class="hero"><div class="wrap">
+  <h1 id="h1">Run your whole restaurant from one screen</h1>
+  <p id="hs"></p>
+  <div class="row"><a class="btn primary lg" href="/signup" id="cta">Start free trial</a><a class="btn lg" style="background:transparent;color:#fff;border-color:rgba(255,255,255,.35)" href="/login">Log in</a></div>
+  <p class="small" style="margin-top:16px;color:#94a3b8" id="trialtxt"></p>
+  <div class="mock"><div class="card"><div class="row between"><b>Today</b><span class="badge ok">Live</span></div>
+    <div class="grid g2 mt"><div class="card kpi"><div class="l">Sales</div><div class="v">৳48,250</div></div><div class="card kpi"><div class="l">Orders</div><div class="v">126</div></div></div>
+    <div id="mockbars"></div></div></div>
+</div></section>
+<section class="sec" id="features"><div class="wrap"><h2>Everything a restaurant needs</h2><p class="sub">One package, every feature. Built for restaurants, cafes, bakeries, fast food, cloud kitchens and chains.</p><div class="grid g3" id="feats"></div></div></section>
+<section class="sec" style="background:var(--soft)" id="pricing"><div class="wrap"><h2>Simple pricing</h2><p class="sub">One plan with all features. No hidden charges.</p><div class="price" id="price"></div></div></section>
+<section class="sec"><div class="wrap" style="max-width:760px"><h2>Questions</h2><div class="faq mt" id="faq"></div></div></section>
+<footer><div class="wrap row between"><div><b style="color:#fff" id="fname"></b><div id="fcontact" class="mt"></div></div><div id="ffoot"></div></div></footer>
+<script src="/js/lib.js"></script>
+<script>
+GET('/api/public/site').then(s => {
+  const b = s.brand, L = s.landing, P = s.plan; CUR = b.currency || '৳';
+  document.title = (s.seo && s.seo.title) || b.name;
+  document.querySelector('meta[name=description]').content = (s.seo && s.seo.description) || b.tagline;
+  if (b.color) document.documentElement.style.setProperty('--brand', b.color);
+  $('#lg span').textContent = b.name; $('#fname').textContent = b.name;
+  if (b.logo_id) $('#lg .m').innerHTML = `<img src="/f/${b.logo_id}" style="width:100%;height:100%;object-fit:cover">`;
+  $('#h1').textContent = L.hero_title; $('#hs').textContent = L.hero_sub; $('#cta').textContent = L.cta || 'Start free trial';
+  $('#trialtxt').textContent = `${P.trial_days}-day free trial · then ${fmt.money(P.price)} / ${P.duration_days == 30 ? 'month' : P.duration_days + ' days'}`;
+  $('#feats').innerHTML = (L.features || []).map(f => `<div class="feat"><div class="i">${esc(f.icon || '✓')}</div><h3>${esc(f.title)}</h3><p class="muted" style="margin:0">${esc(f.text)}</p></div>`).join('');
+  $('#price').innerHTML = `<div class="badge brand">${esc(P.name)}</div><div class="amt mt">${fmt.money(P.price)}<span class="muted" style="font-size:16px;font-weight:600"> / ${P.duration_days == 30 ? 'month' : P.duration_days + ' days'}</span></div>
+    ${P.yearly_price ? `<div class="muted">or ${fmt.money(P.yearly_price)} per year</div>` : ''}<p class="muted">${esc(P.note || '')}</p>
+    <ul>${(P.features || []).map(f => `<li>${esc(f)}</li>`).join('')}</ul><a class="btn primary lg block" href="/signup">Start ${P.trial_days}-day free trial</a>`;
+  $('#faq').innerHTML = (L.faq || []).map(f => `<details><summary>${esc(f.q)}</summary><p class="muted" style="margin:10px 0 0">${esc(f.a)}</p></details>`).join('');
+  $('#fcontact').innerHTML = [b.phone && '📞 ' + esc(b.phone), b.email && '✉️ ' + esc(b.email), b.website && '🌐 ' + esc(b.website)].filter(Boolean).join(' &nbsp; ');
+  $('#ffoot').textContent = b.footer || '';
+  if (!s.signup_enabled) { $('#cta').href = $('#navcta').href = 'tel:' + b.phone; $('#cta').textContent = 'Contact us'; }
+  if (s.announcements && s.announcements.length) $('#ann').innerHTML = s.announcements.map(a => `<div class="ann">${esc(a.title)}${a.body ? ' — ' + esc(a.body) : ''}</div>`).join('');
+});
+$('#mockbars').innerHTML = barChart(['9','10','11','12','1','2','3','4','5','6','7','8'], [2,4,6,11,15,9,5,6,9,14,18,12], { h: 140, money: false });
+</script></body></html>

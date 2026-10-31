@@ -1,0 +1,41 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Setup — Baybex Restaurant</title>
+<link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/css/app.css"></head><body>
+<div class="pub"><div class="auth" style="max-width:560px">
+  <div class="logo"><div class="m">B</div> Baybex Restaurant — Setup</div>
+  <div class="card" id="box"><div class="loading"><span class="spin"></span></div></div>
+</div></div>
+<script src="/js/lib.js"></script>
+<script>
+(async () => {
+  const st = await GET('/api/setup/status');
+  const box = $('#box');
+  if (!st.needs_setup) { box.innerHTML = `<h2>Setup is complete</h2><p class="muted">Your platform is ready.</p><div class="row"><a class="btn primary" href="/admin">Super admin panel</a><a class="btn" href="/">Website</a></div>`; return; }
+  box.innerHTML = `<h2>Welcome! Let's get your SaaS running</h2><p class="muted">This page appears only once. Nothing is stored in .env files.</p>
+  <form id="f">
+   ${st.db_connected ? '<div class="alert ok">✓ Database is connected. Create your super admin account.</div>' : `
+    <h3 class="mt">1. PostgreSQL database</h3>
+    <p class="small muted">In Coolify: create a PostgreSQL resource, then copy its <b>Postgres URL (internal)</b> and paste it here. Or fill the fields below.</p>
+    <label class="f"><span>Database URL</span><input name="db_url" placeholder="postgres://user:password@host:5432/dbname"></label>
+    <details class="mb"><summary class="small" style="cursor:pointer">…or enter host / user / password separately</summary>
+      <div class="fgrid mt"><label class="f"><span>Host</span><input name="db_host"></label><label class="f"><span>Port</span><input name="db_port" value="5432"></label>
+      <label class="f"><span>User</span><input name="db_user"></label><label class="f"><span>Password</span><input name="db_password" type="password"></label>
+      <label class="f full"><span>Database name</span><input name="db_name"></label></div></details>
+    <label class="check"><input type="checkbox" name="db_ssl"> Database requires SSL (managed cloud DB)</label>`}
+   <h3 class="mt">${st.db_connected ? '' : '2. '}Super admin (you)</h3>
+   <div class="fgrid">
+    <label class="f"><span>Your name</span><input name="admin_name" value="Super Admin"></label>
+    <label class="f"><span>Platform / brand name</span><input name="brand_name" value="Baybex Restaurant"></label>
+    <label class="f"><span>Email <b class="req">*</b></span><input name="admin_email" type="email" required></label>
+    <label class="f"><span>Password <b class="req">*</b> (6+ characters)</span><input name="admin_password" type="password" minlength="6" required></label>
+   </div>
+   <button class="btn primary lg block mt" id="go">Finish setup</button>
+  </form>`;
+  $('#f').onsubmit = async e => {
+    e.preventDefault();
+    const fd = Object.fromEntries(new FormData(e.target)); fd.db_ssl = !!fd.db_ssl;
+    $('#go').disabled = true; $('#go').innerHTML = '<span class="spin"></span> Connecting…';
+    try { await POST('/api/setup', fd); box.innerHTML = `<h2>🎉 All set!</h2><p>Your restaurant SaaS is live. Log in to the super admin panel to set your plan price, bKash/Nagad numbers and landing page.</p><a class="btn primary lg block" href="/admin">Open super admin</a>`; }
+    catch (err) { errToast(err); $('#go').disabled = false; $('#go').textContent = 'Finish setup'; }
+  };
+})();
+</script></body></html>

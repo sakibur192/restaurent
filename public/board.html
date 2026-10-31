@@ -1,0 +1,18 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Menu board</title>
+<link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/css/app.css"><style>body{background:#0b1220;color:#fff;overflow:hidden}.bd{height:100vh;display:flex;flex-direction:column;padding:3vh 3vw}
+.top{display:flex;align-items:center;gap:20px;margin-bottom:2vh}.top h1{font-size:5vh;margin:0}.lg{width:9vh;height:9vh;border-radius:2vh;background:#fff;overflow:hidden;display:grid;place-items:center;color:var(--brand);font-weight:900;font-size:4vh}.lg img{width:100%;height:100%;object-fit:cover}
+.cat{font-size:4vh;color:#5eead4;font-weight:800;margin:0 0 2vh}.gridb{display:grid;grid-template-columns:repeat(3,1fr);gap:2vh 3vw;flex:1;align-content:start}
+.it{display:flex;gap:1.6vw;align-items:center;background:rgba(255,255,255,.05);border-radius:2vh;padding:1.4vh}.it img,.it .ph{width:12vh;height:12vh;border-radius:1.5vh;object-fit:cover;background:#1e293b;flex:none}.it .n{font-size:2.6vh;font-weight:700}.it .p{font-size:3.2vh;font-weight:900;color:#fbbf24}
+.ban{background:#f59e0b;color:#111;font-weight:800;font-size:3vh;padding:1.5vh 2vw;border-radius:1.5vh;margin-top:2vh;text-align:center}.dots{position:fixed;bottom:2vh;right:3vw;font-size:2vh;color:#94a3b8}</style></head><body>
+<div class="bd" id="b"></div><script src="/js/lib.js"></script><script>
+const slug = location.pathname.split('/')[2]; let D = null, idx = 0;
+async function load() { try { D = await GET('/api/public/menu/' + slug); CUR = D.settings.currency; } catch (e) { $('#b').innerHTML = '<h1>Menu not found</h1>'; } }
+function show() {
+  if (!D) return; const cats = D.categories.filter(c => D.products.some(p => p.category_id === c.id)); if (!cats.length) return;
+  const c = cats[idx % cats.length]; idx++; const R = D.restaurant;
+  $('#b').innerHTML = `<div class="top"><div class="lg">${R.logo_id ? `<img src="/f/${R.logo_id}">` : esc(initials(R.name))}</div><h1>${esc(R.name)}</h1></div><div class="cat">${esc(c.name)}</div>
+    <div class="gridb">${D.products.filter(p => p.category_id === c.id).slice(0, 12).map(p => `<div class="it">${p.image_id ? `<img src="/f/${p.image_id}">` : '<div class="ph"></div>'}<div><div class="n">${esc(p.name)}</div><div class="p">${(p.variants || []).length ? p.variants.map(v => esc(v.name) + ' ' + fmt.money(v.price)).join(' · ') : fmt.money(p.price)}</div></div></div>`).join('')}</div>
+    ${R.banner ? `<div class="ban">${esc(R.banner)}</div>` : ''}<div class="dots">${cats.map((x, i) => i === (idx - 1) % cats.length ? '●' : '○').join(' ')}</div>`;
+}
+load().then(show); setInterval(show, 10000); setInterval(load, 300000);
+</script></body></html>
