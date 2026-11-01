@@ -44,18 +44,19 @@ APP.pages.pos = async (el, params) => {
   el.innerHTML = `<div class="pos"><div class="lp">
       <div class="posbar"><input type="search" id="pq" placeholder="🔍 Search item or scan barcode…" style="flex:1"><button class="btn" id="prun" title="Running orders">🗂 Running <span class="badge" id="runc">…</span></button>${POS.B.shift ? '' : (can('shifts') ? '<a class="btn warn" href="#/shift" title="Open a cash shift">Open shift</a>' : '')}</div>
       <div class="cats" id="pcats"></div><div class="pgrid" id="pgrid"></div></div>
-    <div class="rp">
+    <div class="rp" id="prp"><button type="button" class="cartbar" id="cartbar"></button><div class="rp-in">
       <div class="otype" id="otype">${[['dine_in', '🍽 Dine-in'], ['takeaway', '🥡 Takeaway'], ['delivery', '🛵 Delivery'], ['drive_thru', '🚗 Drive']].map(([k, l]) => `<button data-t="${k}">${l}</button>`).join('')}</div>
       <div class="cartmeta" id="cmeta"></div>
       <div class="cart" id="cart"></div>
       <div class="totals" id="ctot"></div>
       <div class="pos-actions"><button class="btn" id="bhold">⏸ Hold</button><button class="btn dark" id="bkot">🔥 Kitchen</button><button class="btn primary" id="bpay">💳 Pay</button></div>
-    </div></div>`;
+    </div></div></div>`;
   $('#pq').oninput = debounce(e => { POS.q = e.target.value.trim().toLowerCase(); drawProducts(); }, 120);
   $('#pq').onkeydown = e => { if (e.key === 'Enter') { const v = e.target.value.trim(); const p = POS.B.products.find(x => (x.barcode && x.barcode === v) || (x.sku && x.sku.toLowerCase() === v.toLowerCase())); if (p) { addProduct(p); e.target.value = ''; POS.q = ''; drawProducts(); } } };
   $$('#otype button').forEach(b => b.onclick = () => { POS.cart.type = b.dataset.t; if (b.dataset.t !== 'dine_in') { POS.cart.table_id = null; POS.cart.table_name = null; } if (b.dataset.t === 'dine_in' && !POS.cart.table_id) pickTable(); drawCart(); });
   $('#bhold').onclick = () => saveCart('hold'); $('#bkot').onclick = () => saveCart('kitchen'); $('#bpay').onclick = () => payModal();
   $('#prun').onclick = runningOrders;
+  $('#cartbar').onclick = () => $('#prp').classList.toggle('open');
   drawCats(); drawProducts(); drawCart(); refreshRunning();
   const kh = e => { if (e.key === 'F2') { e.preventDefault(); $('#pq').focus(); } if (e.key === 'F9') { e.preventDefault(); payModal(); } if (e.key === 'F8') { e.preventDefault(); saveCart('kitchen'); } };
   document.addEventListener('keydown', kh);
@@ -126,6 +127,9 @@ function drawCart() {
         <button class="btn sm ghost" data-edit="${idx}" title="Edit">✎</button></div>
       <div style="text-align:right"><button class="btn sm ghost" data-del="${idx}" title="Remove" style="color:var(--bad)">🗑</button></div></div>`).join('') : '<div class="empty">Tap items to add them<br><span class="small">F2 search · F8 kitchen · F9 pay</span></div>';
   const t = cartTotals(c);
+  { const cnt = c.items.filter(i => i.kstatus !== 'cancelled').reduce((a, i) => a + (i.by_weight ? 1 : n2(i.qty)), 0); const cb = $('#cartbar');
+    if (cb) { cb.innerHTML = `<span class="cb-l">🛒 <b>${fmt.num(cnt, 0)}</b> item${cnt === 1 ? '' : 's'}${c.table_name ? ' · Table ' + esc(c.table_name) : ''}</span><span class="cb-r"><b>${fmt.money(cartTotals(c).total)}</b> <span class="cb-ch">▲</span></span>`; cb.classList.toggle('has', cnt > 0);
+      if (cnt > (POS._lastCnt || 0)) { cb.classList.remove('bump'); void cb.offsetWidth; cb.classList.add('bump'); } POS._lastCnt = cnt; } }
   $('#ctot').innerHTML = `<div class="tr"><span>Subtotal</span><span>${fmt.money(t.subtotal)}</span></div>
     ${t.itemDisc + t.disc > 0 ? `<div class="tr" style="color:var(--ok)"><span>Discount${c.coupon_code ? ' (' + esc(c.coupon_code) + ')' : ''}</span><span>-${fmt.money(t.itemDisc + t.disc)}</span></div>` : ''}
     ${t.svc ? `<div class="tr"><span>Service charge</span><span>${fmt.money(t.svc)}</span></div>` : ''}
@@ -265,7 +269,7 @@ async function saveCart(action, payments) {
       if (hadDraft.length && localStorage.getItem('bx_autokot') === '1') printKOT(o, o.items.filter(i => i.kstatus !== 'cancelled' && hadDraft.some(h => h.product_id === i.product_id)));
       POS.cart = newCart(c.type); POS.coupon = null;
     }
-    drawCart(); refreshRunning();
+    drawCart(); refreshRunning(); if (action !== 'pay' && $('#prp')) $('#prp').classList.remove('open');
     return o;
   } catch (e) {
     if (e.offline && action === 'pay' && !c.orderId) return queueOffline(payload, c);

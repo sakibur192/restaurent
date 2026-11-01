@@ -29,9 +29,30 @@ function loadDbConfig() {
   return null;
 }
 
+// first start: add the bundled user manual and brochure to the Downloads section (only once)
+async function seedDownloads() {
+  const done = await db.one(`SELECT 1 FROM settings WHERE key='downloads_seeded'`);
+  if (done) return;
+  const docs = [
+    { file: 'user-manual-en.pdf', kind: 'manual', lang: 'en', title_en: 'User Manual (English)', title_bn: 'ইউজার ম্যানুয়াল (ইংরেজি)', desc_en: 'Complete guide to every feature, with screenshots.', desc_bn: 'স্ক্রিনশটসহ প্রতিটি ফিচারের সম্পূর্ণ গাইড।' },
+    { file: 'brochure-bn.pdf', kind: 'brochure', lang: 'bn', title_en: 'Brochure (Bangla)', title_bn: 'ব্রোশিউর (বাংলা)', desc_en: 'Short overview of the system and its benefits.', desc_bn: 'সিস্টেম ও এর সুবিধার সংক্ষিপ্ত পরিচিতি।' }
+  ];
+  let sort = 0;
+  for (const d of docs) {
+    const fp = path.join(__dirname, 'defaults', 'docs', d.file);
+    if (!fs.existsSync(fp)) continue;
+    const buf = fs.readFileSync(fp);
+    const f = await db.one('INSERT INTO files(tenant_id,mime,data) VALUES(NULL,$1,$2) RETURNING id', ['application/pdf', buf]);
+    await db.q('INSERT INTO downloads(kind,lang,title_en,title_bn,desc_en,desc_bn,file_id,filename,size,sort) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+      [d.kind, d.lang, d.title_en, d.title_bn, d.desc_en, d.desc_bn, f.id, 'Baybex-Restaurant-' + d.file, buf.length, ++sort]);
+  }
+  await db.q(`INSERT INTO settings(key,value) VALUES('downloads_seeded','true') ON CONFLICT (key) DO NOTHING`);
+}
+
 async function boot(cfg) {
   db.connect(cfg.url, cfg.ssl);
   await db.migrate();
+  await seedDownloads();
   db.setReady(true);
   console.log('Database connected and schema is up to date');
 }
@@ -86,6 +107,17 @@ app.use('/api', require('./src/routes-public'));
 app.use('/api/app', require('./src/routes-app'));
 app.use('/api/app', require('./src/routes-app2'));
 app.use('/api/r', require('./src/routes-resources'));
+
+// PDF downloads (manual / brochure)
+app.get('/d/:id/:name?', core.wrap(async (req, res) => {
+  const d = await db.one('SELECT d.filename, f.mime, f.data FROM downloads d JOIN files f ON f.id=d.file_id WHERE d.id=$1 AND d.active', [core.int(req.params.id, 0)]);
+  if (!d) return res.status(404).send('File not found');
+  db.q('UPDATE downloads SET hits=hits+1 WHERE id=$1', [core.int(req.params.id, 0)]).catch(() => {});
+  res.setHeader('Content-Type', d.mime);
+  res.setHeader('Content-Disposition', `${req.query.view ? 'inline' : 'attachment'}; filename="${String(d.filename).replace(/"/g, '')}"`);
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.end(d.data);
+}));
 
 // uploaded images (stored in PostgreSQL so they survive redeploys)
 app.get('/f/:id', core.wrap(async (req, res) => {

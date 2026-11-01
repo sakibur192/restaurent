@@ -53,6 +53,8 @@ CREATE TABLE IF NOT EXISTS announcements (id SERIAL PRIMARY KEY, title TEXT, bod
 CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, kind TEXT NOT NULL, user_id INT NOT NULL, tenant_id INT, branch_id INT, impersonated BOOLEAN DEFAULT false,
   ip TEXT, ua TEXT, created_at TIMESTAMPTZ DEFAULT now(), last_seen TIMESTAMPTZ DEFAULT now(), expires_at TIMESTAMPTZ NOT NULL);
 CREATE TABLE IF NOT EXISTS files (id SERIAL PRIMARY KEY, tenant_id INT, mime TEXT, data BYTEA, created_at TIMESTAMPTZ DEFAULT now());
+CREATE TABLE IF NOT EXISTS downloads (id SERIAL PRIMARY KEY, kind TEXT DEFAULT 'manual', lang TEXT DEFAULT 'en', title_en TEXT, title_bn TEXT, desc_en TEXT, desc_bn TEXT,
+  file_id INT, filename TEXT, size INT DEFAULT 0, sort INT DEFAULT 0, active BOOLEAN DEFAULT true, hits INT DEFAULT 0, created_at TIMESTAMPTZ DEFAULT now());
 CREATE TABLE IF NOT EXISTS login_logs (id SERIAL PRIMARY KEY, kind TEXT, tenant_id INT, user_id INT, username TEXT, success BOOLEAN, ip TEXT, ua TEXT, created_at TIMESTAMPTZ DEFAULT now());
 
 ${T('branches', `name TEXT NOT NULL, address TEXT, phone TEXT, active BOOLEAN DEFAULT true, online_ordering BOOLEAN DEFAULT true`)}
@@ -139,36 +141,30 @@ const DEFAULT_SETTINGS = {
     footer: '© Baybex. All rights reserved.', currency: '৳'
   },
   plan: {
-    name: 'Baybex All-in-One', price: 1500, duration_days: 30, trial_days: 14,
-    yearly_price: 15000, note: 'Every feature included. Unlimited branches, staff and orders.',
+    name: 'Baybex All-in-One', name_bn: 'বেবেক্স অল-ইন-ওয়ান', trial_days: 14,
+    note: 'Every feature included. Unlimited branches, staff and orders.', note_bn: 'সব ফিচার একসাথে। যত খুশি ব্রাঞ্চ, স্টাফ ও অর্ডার।',
+    periods: [
+      { months: 1, days: 30, price: 500, label_en: 'Monthly', label_bn: 'মাসিক', badge_en: '', badge_bn: '', active: true },
+      { months: 3, days: 90, price: 1500, label_en: '3 months', label_bn: '৩ মাস', badge_en: '', badge_bn: '', active: true },
+      { months: 6, days: 180, price: 3000, label_en: '6 months', label_bn: '৬ মাস', badge_en: '', badge_bn: '', active: true },
+      { months: 12, days: 365, price: 6000, label_en: '1 year', label_bn: '১ বছর', badge_en: 'Best value', badge_bn: 'সেরা অফার', active: true }
+    ],
     features: ['POS & billing (dine-in, takeaway, delivery)', 'Kitchen display system', 'Table & floor plan', 'Menu, variants & add-ons',
       'Inventory & recipe costing', 'Purchase & suppliers', 'Customers, loyalty & coupons', 'QR menu & online ordering',
-      'Delivery & riders', 'Reservations', 'Staff, attendance & payroll', 'Accounting & reports', 'Multi-branch', 'Multi-level staff logins']
+      'Delivery & riders', 'Reservations', 'Staff, attendance & payroll', 'Accounting & reports', 'Multi-branch', 'Multi-level staff logins'],
+    features_bn: ['পস ও বিলিং (ডাইন-ইন, টেকঅ্যাওয়ে, ডেলিভারি)', 'কিচেন ডিসপ্লে', 'টেবিল ও ফ্লোর প্ল্যান', 'মেনু, সাইজ ও অ্যাড-অন',
+      'স্টক ও রেসিপি কস্টিং', 'ক্রয় ও সাপ্লায়ার', 'কাস্টমার, লয়্যালটি ও কুপন', 'কিউআর মেনু ও অনলাইন অর্ডার',
+      'ডেলিভারি ও রাইডার', 'রিজার্ভেশন', 'স্টাফ, হাজিরা ও বেতন', 'হিসাব ও রিপোর্ট', 'মাল্টি-ব্রাঞ্চ', 'বহুস্তরের স্টাফ লগইন']
   },
   payment: {
     instructions: 'Send Money to the number below, then submit the Transaction ID. Your account is activated after verification.',
+    instructions_bn: 'নিচের নম্বরে সেন্ড মানি করুন, তারপর ট্রানজেকশন আইডি জমা দিন। যাচাইয়ের পর আপনার অ্যাকাউন্ট চালু হবে।',
     methods: [{ name: 'bKash', number: '01750006696', type: 'Personal' }, { name: 'Nagad', number: '01750006696', type: 'Personal' }]
   },
-  landing: {
-    hero_title: 'Run your whole restaurant from one screen',
-    hero_sub: 'POS, kitchen display, inventory, recipe costing, QR ordering, delivery, staff and accounts — built for restaurants, cafes, bakeries and cloud kitchens in Bangladesh.',
-    cta: 'Start free trial',
-    features: [
-      { icon: '🧾', title: 'Fast POS', text: 'Dine-in, takeaway and delivery billing with split bills, VAT, service charge and bKash/Nagad.' },
-      { icon: '👨‍🍳', title: 'Kitchen display', text: 'Orders flow straight to grill, drinks or bakery stations with live timers.' },
-      { icon: '📦', title: 'Inventory & recipes', text: 'Ingredients deduct automatically on every sale. Know your food cost per dish.' },
-      { icon: '📱', title: 'QR menu & online orders', text: 'Guests scan the table QR, order and track — no app needed.' },
-      { icon: '🛵', title: 'Delivery', text: 'Zones, charges, riders and cash collection in one board.' },
-      { icon: '📊', title: 'Reports & accounts', text: 'Daily sales, profit & loss, VAT report, cashbook and branch comparison.' }
-    ],
-    faq: [
-      { q: 'Do I need to install anything?', a: 'No. It runs in the browser on any PC, tablet or phone.' },
-      { q: 'Can my staff have separate logins?', a: 'Yes. Owner, manager, cashier, waiter, kitchen, accountant — each sees only what you allow. Staff can also log in with a quick PIN.' },
-      { q: 'What happens after the trial?', a: 'Pay via bKash/Nagad from the Billing page and continue with all your data intact.' }
-    ]
-  },
+  landing: require('./landing-default'),
+  default_lang: 'bn',
   signup_enabled: true,
-  seo: { title: 'Baybex Restaurant Management System', description: 'Restaurant POS + ERP SaaS for Bangladesh' }
+  seo: { title: 'Baybex Restaurant Management System', description: 'Restaurant POS + ERP SaaS for Bangladesh', title_bn: 'বেবেক্স রেস্টুরেন্ট ম্যানেজমেন্ট সিস্টেম', description_bn: 'বাংলাদেশের রেস্টুরেন্টের জন্য পস ও ইআরপি সফটওয়্যার' }
 };
 
 async function migrate() {

@@ -32,6 +32,8 @@ const NAV = [
 APP.boot = async function () {
   try { APP.me = await GET('/api/app/me'); } catch (e) { return; }
   const me = APP.me, s = me.tenant.settings;
+  { let def = null; try { def = localStorage.getItem('bx_lang_def'); localStorage.setItem('bx_lang_def', s.ui_lang || 'en'); } catch (e) { }
+    if (window.I18N && !localStorage.getItem('bx_lang') && (s.ui_lang || 'en') !== I18N.lang && def !== (s.ui_lang || 'en')) { location.reload(); return; } }
   CUR = s.currency || '৳'; TZ = s.timezone || 'Asia/Dhaka';
   if (s.color) document.documentElement.style.setProperty('--brand', s.color);
   document.title = me.tenant.name;
@@ -49,13 +51,13 @@ APP.boot = async function () {
   banner += (me.announcements || []).map(a => `<div class="banner ${a.level === 'bad' ? 'bad' : a.level === 'warn' ? 'warn' : 'info'}">📢 ${esc(a.title)}${a.body ? ' — ' + esc(a.body) : ''}</div>`).join('');
   const brs = me.branches.filter(b => b.active || b.id === me.branch_id);
   $('#root').innerHTML = `<div class="shell"><aside class="side" id="side">
-      <div class="brand"><div class="logo">${s.logo_id ? `<img src="/f/${s.logo_id}">` : esc(initials(me.tenant.name))}</div><div style="min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(me.tenant.name)}</div><div class="tn">${esc(me.user.name)} · ${esc(me.user.role || '')}</div></div></div>
+      <div class="brand"><div class="logo">${s.logo_id ? `<img src="/f/${s.logo_id}">` : esc(initials(me.tenant.name))}</div><div style="min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" data-notr>${esc(me.tenant.name)}</div><div class="tn"><span data-notr>${esc(me.user.name)}</span> · ${esc(me.user.role || '')}</div></div></div>
       <nav class="nav">${navHtml}</nav></aside>
     <div class="main">${banner}<div class="top noprint"><button class="btn ghost icon burger" id="burger">☰</button><div class="title" id="ttl"></div>
       ${brs.length > 1 || !me.branch_locked ? `<select id="brsel" ${me.branch_locked ? 'disabled' : ''} title="Branch">${brs.map(b => `<option value="${b.id}" ${b.id === me.branch_id ? 'selected' : ''}>🏬 ${esc(b.name)}</option>`).join('')}</select>` : ''}
-      <button class="btn ghost icon bell" id="bell" title="Notifications">🔔<span class="dot" id="bdot" style="display:none"></span></button>
+      ${window.I18N ? I18N.toggleHTML() : ''}<button class="btn ghost icon bell" id="bell" title="Notifications">🔔<span class="dot" id="bdot" style="display:none"></span></button>
       <div style="position:relative"><button class="btn ghost" id="um">${esc(initials(me.user.name))} ▾</button><div class="menu-pop" id="umenu" style="display:none">
-        <div class="small muted" style="padding:8px 12px">${esc(me.user.name)} · @${esc(me.user.username)}<br>Restaurant ID: <b>${esc(me.tenant.slug)}</b></div>
+        <div class="small muted" style="padding:8px 12px"><span data-notr>${esc(me.user.name)} · @${esc(me.user.username)}</span><br>Restaurant ID: <b>${esc(me.tenant.slug)}</b></div>
         <button id="mpw">Change password</button><button id="mpin">Set my quick PIN</button><button id="mlock">Lock / switch user</button><button id="mout">Log out</button></div></div>
     </div><div class="page" id="page"></div></div></div>`;
   $('#burger').onclick = () => $('#side').classList.toggle('open');
@@ -65,7 +67,7 @@ APP.boot = async function () {
   $('#mout').onclick = async () => { await POST('/api/auth/logout'); location.href = '/login'; };
   $('#mlock').onclick = async () => { await POST('/api/auth/logout'); location.href = '/login?r=' + me.tenant.slug; };
   $('#mpw').onclick = () => modal({ title: 'Change password', body: `<label class="f"><span>Current password</span><input type="password" id="cp1"></label><label class="f"><span>New password</span><input type="password" id="cp2"></label>`,
-    actions: [{ label: 'Cancel' }, { label: 'Change', cls: 'primary', onClick: async () => { await POST('/api/app/change-password', { current: $('#cp1').value, password: $('#cp2').value }); toast('Password changed', 'ok'); } }] });
+    actions: [{ label: 'Cancel' }, { label: 'Change password', cls: 'primary', onClick: async () => { await POST('/api/app/change-password', { current: $('#cp1').value, password: $('#cp2').value }); toast('Password changed', 'ok'); } }] });
   $('#mpin').onclick = async () => { const pin = await askText('Quick PIN', { label: 'Choose a 4-6 digit PIN for fast login & approvals', type: 'password' }); if (pin) { await POST('/api/app/my-pin', { pin }); toast('PIN saved', 'ok'); } };
   $('#bell').onclick = () => location.hash = '#/notifications';
   if (inactive && !location.hash.startsWith('#/billing')) location.hash = '#/billing';
@@ -176,7 +178,8 @@ async function editRecord(resName, row, { title, defaults = {}, onSaved, only, s
     const r = row && row.id ? await PUT(`/api/r/${resName}/${row.id}`, data) : await POST(`/api/r/${resName}`, data);
     toast('Saved', 'ok'); APP.refs[resName] = null; onSaved && onSaved(r);
   } });
-  return modal({ title: title || ((row && row.id ? 'Edit ' : 'Add ') + d.title.replace(/s$/, '').toLowerCase()), body: form, actions, size: Object.keys(d.fields).length > 8 ? 'wide' : '' });
+  const sg = t => /[&/]/.test(t) ? t : t.replace(/ies$/, 'y').replace(/(ch|sh|x|ss)es$/, '$1').replace(/([^s])s$/, '$1');
+  return modal({ title: title || ((row && row.id ? 'Edit ' : 'Add ') + sg(d.title).toLowerCase()), body: form, actions, size: Object.keys(d.fields).length > 8 ? 'wide' : '' });
 }
 // full CRUD list page for a resource
 async function crudPage(el, resName, opts = {}) {
@@ -288,32 +291,49 @@ APP.pages.notifications = async el => {
 // ================= billing =================
 APP.pages.billing = async el => {
   const b = await GET('/api/app/billing');
+  const bn = (window.I18N && I18N.lang === 'bn');
   const days = b.expires_at ? Math.ceil((new Date(b.expires_at) - Date.now()) / 86400000) : null;
+  const pers = (b.plan.periods || []).filter(p => p.active !== false);
+  const monthly = pers.find(p => Number(p.months) === 1);
+  let sel = (pers.find(p => p.badge_en || p.badge_bn) || pers[0] || {}).months;
+  const card = p => {
+    const pm = p.months ? p.price / p.months : p.price; const save = monthly && p.months > 1 ? Math.round((1 - pm / monthly.price) * 100) : 0;
+    const badge2 = bn ? (p.badge_bn || p.badge_en) : (p.badge_en || p.badge_bn);
+    return `<button type="button" class="percard ${Number(p.months) === Number(sel) ? 'on' : ''}" data-m="${p.months}">${badge2 ? `<span class="pbdg" data-notr>${esc(badge2)}</span>` : ''}
+      <b data-notr>${esc(bn ? (p.label_bn || p.label_en) : (p.label_en || p.label_bn))}</b><span class="pamt">${fmt.money(p.price)}</span>
+      <span class="small muted">${p.months > 1 ? '≈ ' + fmt.money(Math.round(pm)) + ' / month' : '/ month'} · ${p.days} days</span>${save > 0 ? `<span class="badge ok" style="margin-top:4px">Save ${save}%</span>` : ''}</button>`;
+  };
   el.innerHTML = `<div class="grid g2"><div class="card"><h3>Your subscription</h3>
       <div class="row between"><span>Status</span>${badge(b.status)}</div><div class="row between mt"><span>Valid until</span><b>${fmt.date(b.expires_at)}${days !== null ? ` (${days >= 0 ? days + ' days left' : 'expired'})` : ''}</b></div>
-      <hr><div class="badge brand">${esc(b.plan.name)}</div><div style="font-size:30px;font-weight:800;margin:8px 0">${fmt.money(b.plan.price)} <span class="muted" style="font-size:14px">/ ${b.plan.duration_days} days</span></div>
-      ${b.plan.yearly_price ? `<div class="muted">Yearly: ${fmt.money(b.plan.yearly_price)}</div>` : ''}<ul class="small">${(b.plan.features || []).map(f => `<li>${esc(f)}</li>`).join('')}</ul></div>
-    <div class="card"><h3>Pay & renew</h3><p class="muted">${esc(b.payment.instructions || '')}</p>
+      <hr><div class="badge brand" data-notr>${esc(bn ? (b.plan.name_bn || b.plan.name) : b.plan.name)}</div><p class="small muted" data-notr>${esc(bn ? (b.plan.note_bn || b.plan.note || '') : (b.plan.note || ''))}</p>
+      <ul class="small" data-notr>${((bn ? b.plan.features_bn : b.plan.features) || b.plan.features || []).map(f => `<li>${esc(f)}</li>`).join('')}</ul></div>
+    <div class="card"><h3>Pay & renew</h3>
+      <div class="pergrid" id="pergrid">${pers.map(card).join('') || '<div class="muted">No billing period is available. Please contact support.</div>'}</div>
+      <p class="muted" data-notr>${esc(bn ? (b.payment.instructions_bn || b.payment.instructions || '') : (b.payment.instructions || ''))}</p>
       ${(b.payment.methods || []).map(m => `<div class="alert info"><b>${esc(m.name)}</b> ${esc(m.type || '')}: <b style="font-size:16px">${esc(m.number)}</b></div>`).join('')}
-      <form id="pf"><div class="fgrid"><label class="f"><span>Paid with</span><select name="method">${(b.payment.methods || []).map(m => `<option>${esc(m.name)}</option>`).join('')}<option>Bank</option><option>Cash</option></select></label>
-      <label class="f"><span>Period</span><select name="period"><option value="monthly">${b.plan.duration_days} days — ${fmt.money(b.plan.price)}</option>${b.plan.yearly_price ? `<option value="yearly">1 year — ${fmt.money(b.plan.yearly_price)}</option>` : ''}</select></label>
-      <label class="f"><span>Transaction ID (TrxID)</span><input name="trx_id" required></label><label class="f"><span>Sent from number</span><input name="sender"></label></div>
+      <div class="alert" id="paysum"></div>
+      <form id="pf"><div class="fgrid"><label class="f"><span>Paid with</span><select name="method">${(b.payment.methods || []).map(m => `<option value="${esc(m.name)}">${esc(m.name)}</option>`).join('')}<option value="Bank">Bank</option><option value="Cash">Cash</option></select></label>
+      <label class="f"><span>Transaction ID (TrxID)</span><input name="trx_id" required></label><label class="f"><span>Sent from number</span><input name="sender" inputmode="tel"></label></div>
       <button class="btn primary block">Submit payment</button></form><p class="small muted">Need help? Call ${esc(b.brand.phone || '')} ${b.brand.email ? '· ' + esc(b.brand.email) : ''}</p></div></div>
     <div class="card p0 mt"><div style="padding:14px 16px 0"><h3>Payment history</h3></div>${table([{ key: 'created_at', label: 'Date', fmt: fmt.dt }, { key: 'amount', label: 'Amount', num: 1, fmt: fmt.money }, { key: 'method', label: 'Method' }, { key: 'trx_id', label: 'TrxID' }, { key: 'days', label: 'Days', num: 1 }, { key: 'status', label: 'Status', html: r => badge(r.status) }, { key: 'note', label: 'Note' }], b.payments, { empty: 'No payments yet' })}</div>`;
-  $('#pf').onsubmit = async e => { e.preventDefault(); await POST('/api/app/billing/pay', Object.fromEntries(new FormData(e.target))); toast('Payment submitted. We will verify it shortly.', 'ok'); APP.route(); };
+  const sum = () => { const p = pers.find(x => Number(x.months) === Number(sel)); $('#paysum').innerHTML = p ? L(`Send <b>${fmt.money(p.price)}</b> for <b>${p.days} days</b>, then enter the transaction ID below.`, `<b>${p.days} দিনের</b> জন্য <b>${fmt.money(p.price)}</b> পাঠান, তারপর নিচে ট্রানজেকশন আইডি দিন।`) : ''; };
+  $$('#pergrid .percard').forEach(x => x.onclick = () => { sel = x.dataset.m; $$('#pergrid .percard').forEach(y => y.classList.toggle('on', y === x)); sum(); });
+  sum();
+  $('#pf').onsubmit = async e => { e.preventDefault(); await POST('/api/app/billing/pay', { ...Object.fromEntries(new FormData(e.target)), months: Number(sel) }); toast('Payment submitted. We will verify it shortly.', 'ok'); APP.route(); };
 };
 
 // ================= branches =================
 APP.pages.branches = el => crudPage(el, 'branches', { note: 'Each branch has its own tables, stock, orders and cash. Staff can be locked to one branch in Settings → Staff.', addLabel: 'Add branch', onRow: (r, load) => editRecord('branches', r, { onSaved: () => { load(); setTimeout(() => location.reload(), 600); } }) });
 
 // ================= settings =================
-const SET_TABS = [{ k: 'general', l: 'Restaurant' }, { k: 'billing', l: 'VAT, charges & payments' }, { k: 'receipt', l: 'Receipt' }, { k: 'ordering', l: 'QR & online ordering' }, { k: 'users', l: 'Staff logins' }, { k: 'roles', l: 'Roles & permissions' }, { k: 'security', l: 'Security & logs' }, { k: 'backup', l: 'Backup & import' }];
+const SET_TABS = [{ k: 'general', l: 'Restaurant' }, { k: 'billing', l: 'VAT, charges & payments' }, { k: 'receipt', l: 'Receipt' }, { k: 'ordering', l: 'QR & online ordering' }, { k: 'theme', l: 'Menu design' }, { k: 'users', l: 'Staff logins' }, { k: 'roles', l: 'Roles & permissions' }, { k: 'security', l: 'Security & logs' }, { k: 'backup', l: 'Backup & import' }];
 APP.pages.settings = async (el, params) => {
   const tab = pickTab(SET_TABS, params);
   el.innerHTML = tabsHTML('settings', SET_TABS, tab) + '<div id="st"></div>';
   const box = $('#st');
   if (['general', 'billing', 'receipt', 'ordering'].includes(tab)) return settingsForm(box, tab);
   if (tab === 'users') return usersPage(box);
+  if (tab === 'theme') return themeEditor(box);
   if (tab === 'roles') return rolesPage(box);
   if (tab === 'security') {
     const [sess, logins, audit] = await Promise.all([GET('/api/app/sessions'), GET('/api/app/logins'), GET('/api/app/audit')]);
@@ -339,6 +359,8 @@ async function settingsForm(box, tab) {
       <label class="f"><span>Phone</span><input data-t name="phone" value="${esc(t.phone || '')}"></label><label class="f"><span>Email</span><input data-t name="email" value="${esc(t.email || '')}"></label>
       <label class="f full"><span>Address</span><input data-t name="address" value="${esc(t.address || '')}"></label>
       <label class="f"><span>Currency symbol</span><input name="currency" value="${esc(s.currency)}"></label><label class="f"><span>Time zone</span><input name="timezone" value="${esc(s.timezone)}"></label>
+      <label class="f"><span>Staff app language (default)</span><select name="ui_lang"><option value="bn" ${s.ui_lang === 'bn' ? 'selected' : ''}>বাংলা (Bangla)</option><option value="en" ${s.ui_lang !== 'bn' ? 'selected' : ''}>English</option></select><small class="muted">Each person can also switch language from the top bar.</small></label>
+      <label class="f"><span>Online menu language</span><select name="menu_lang"><option value="bn" ${s.menu_lang !== 'en' ? 'selected' : ''}>বাংলা (Bangla)</option><option value="en" ${s.menu_lang === 'en' ? 'selected' : ''}>English</option></select></label>
       <label class="f"><span>Theme color</span><input type="color" name="color" value="${esc(s.color || '#0f766e')}" style="height:40px"></label>
       <label class="f"><span>Kitchen: mark order "late" after (minutes)</span><input type="number" name="kds_delay_min" value="${s.kds_delay_min}"></label>
       <label class="check full"><input type="checkbox" name="kds_enabled" ${s.kds_enabled !== false ? 'checked' : ''}> Use kitchen display (send items to kitchen screens)</label>
@@ -365,10 +387,11 @@ async function settingsForm(box, tab) {
       <label class="check"><input type="checkbox" data-sms="online_accept" ${s.sms_events && s.sms_events.online_accept ? 'checked' : ''}> Order accepted</label><label class="check"><input type="checkbox" data-sms="ready" ${s.sms_events && s.sms_events.ready ? 'checked' : ''}> Order ready</label><label class="check"><input type="checkbox" data-sms="reservation" ${s.sms_events && s.sms_events.reservation ? 'checked' : ''}> Reservations</label>
       <div class="fsec">Your links</div>
       <div class="full"><div class="alert info small">🌐 Online menu & ordering: <a href="${esc(d.menu_url)}" target="_blank">${esc(d.menu_url)}</a><br>🖥️ Self-service kiosk: <a href="${esc(d.kiosk_url)}" target="_blank">${esc(d.kiosk_url)}</a><br>📺 Digital menu board (TV): <a href="${esc(d.board_url)}" target="_blank">${esc(d.board_url)}</a><br>👀 Customer-facing display (2nd screen at the cashier): <a href="${esc(d.display_url)}" target="_blank">${esc(d.display_url)}</a></div>
-      <div class="row"><img src="/api/app/qr/menu" style="width:130px;border:1px solid var(--line);border-radius:10px"><div class="muted small">QR for your online menu — print it for flyers, Facebook page or takeaway bags. Table QR codes are in Tables → QR codes.</div></div></div></div>`
+      <div class="row"><img src="/api/app/qr/menu" style="width:130px;border:1px solid var(--line);border-radius:10px"><div><div class="muted small">QR for your online menu — print it for flyers, Facebook page or takeaway bags. Table QR codes are in Tables → QR codes.</div><div class="row mt" style="gap:6px"><button type="button" class="btn sm primary" id="qdm">⬇ Download menu QR</button><button type="button" class="btn sm" id="qdk">⬇ Download kiosk QR</button></div></div></div></div></div>`
   };
   box.innerHTML = `<div class="card" style="max-width:860px"><form id="sf">${F[tab]}<hr><button class="btn primary">Save settings</button></form></div>`;
   let logo = s.logo_id;
+  if ($('#qdm')) { $('#qdm').onclick = () => qrDownload({ target: 'menu', title: 'Download online menu QR' }); $('#qdk').onclick = () => qrDownload({ target: 'kiosk', title: 'Download kiosk QR' }); }
   if ($('#lgf')) $('#lgf').onchange = async e => { const f = e.target.files[0]; if (!f) return; const r = await POST('/api/app/upload', { data: await imageToDataURL(f, 500) }); logo = r.id; $('#lg').src = '/f/' + r.id; };
   $('#sf').onsubmit = async e => {
     e.preventDefault(); const f = e.target; const ns = {}, nt = {};
@@ -378,12 +401,12 @@ async function settingsForm(box, tab) {
     if ($('[data-sms]', f)) { ns.sms_events = {}; $$('[data-sms]', f).forEach(i => { ns.sms_events[i.dataset.sms] = i.checked; }); }
     if (tab === 'general') ns.logo_id = logo;
     await PUT('/api/app/settings', { settings: ns, tenant: nt }); toast('Settings saved', 'ok');
-    if (tab === 'general') setTimeout(() => location.reload(), 500);
+    if (tab === 'general') { try { localStorage.removeItem('bx_lang_def'); } catch (e) { } setTimeout(() => location.reload(), 500); }
   };
 }
 async function usersPage(box) {
   const [users, roles] = await Promise.all([GET('/api/app/users'), GET('/api/app/roles')]);
-  box.innerHTML = `<div class="page-h"><p class="muted mt0">Each staff member logs in with Restaurant ID <b>${esc(APP.me.tenant.slug)}</b> + username/password, or just a quick PIN.</p><button class="btn primary" id="ua">+ Add staff login</button></div>
+  box.innerHTML = `<div class="page-h"><p class="muted mt0">${L(`Each staff member logs in with Restaurant ID <b>${esc(APP.me.tenant.slug)}</b> + username/password, or just a quick PIN.`, `প্রত্যেক স্টাফ রেস্টুরেন্ট আইডি <b data-notr>${esc(APP.me.tenant.slug)}</b> + ইউজারনেম/পাসওয়ার্ড অথবা শুধু দ্রুত PIN দিয়ে লগইন করবে।`)}</p><button class="btn primary" id="ua">+ Add staff login</button></div>
     <div class="card p0">${table([{ key: 'name', label: 'Name', html: u => `<b>${esc(u.name)}</b><div class="small muted">@${esc(u.username)}</div>` }, { key: 'role_name', label: 'Role', html: u => badge(u.role_name || '—') }, { key: 'branch_name', label: 'Branch', fmt: v => v || 'All branches' },
       { key: 'has_pin', label: 'PIN', fmt: v => v ? '✓' : '—' }, { key: 'phone', label: 'Phone' }, { key: 'last_login', label: 'Last login', fmt: fmt.ago }, { key: 'active', label: 'Status', html: u => u.active ? badge('active') : '<span class="badge bad">Disabled</span>' }], users, { onRow: 1 })}</div>`;
   const edit = u => modal({ title: u ? 'Edit staff' : 'Add staff login', size: 'wide', body: `<form id="uf" class="fgrid">
@@ -409,4 +432,108 @@ async function rolesPage(box) {
     actions: [...(r ? [{ label: 'Delete', cls: 'danger', onClick: async () => { await DEL('/api/app/roles/' + r.id); APP.route(); } }] : []), { label: 'Cancel' },
       { label: 'Save', cls: 'primary', onClick: async ({ el }) => { const d = { name: $('#rn', el).value, perms: $$('input[type=checkbox]:checked', el).map(x => x.value) }; r ? await PUT('/api/app/roles/' + r.id, d) : await POST('/api/app/roles', d); toast('Saved', 'ok'); APP.route(); } }] });
   $('#ra').onclick = () => edit(null); $$('[data-r]', box).forEach(b => b.onclick = () => edit(roles.find(x => x.id == b.dataset.r)));
+}
+
+// ================= QR download (exact size, square, print quality) =================
+function qrDownload({ target, id, title, previewId }) {
+  let saved = {}; try { saved = JSON.parse(localStorage.getItem('bx_qrdl') || '{}'); } catch (e) { }
+  const d = Object.assign({ unit: 'cm', size: 5, format: 'png', dpi: 300, margin: 2, ecl: 'M', fg: '#000000', bg: '#ffffff' }, saved);
+  const presets = { mm: [25, 30, 40, 50, 60, 80, 100], cm: [2.5, 3, 4, 5, 6, 8, 10, 15], in: [1, 1.5, 2, 2.5, 3, 4, 6] };
+  const body = `<div class="qrdl"><div class="qrprev"><div class="qrbox"><img id="qdimg" alt="QR preview"></div><div class="small muted center mt" id="qdinfo"></div></div>
+    <div><div class="fgrid">
+      <div class="f full"><span>Unit</span><div class="seg" id="qdunit">${['mm', 'cm', 'in'].map(u => `<button type="button" data-u="${u}" class="${d.unit === u ? 'on' : ''}">${{ mm: 'Millimetre (mm)', cm: 'Centimetre (cm)', in: 'Inch (in)' }[u]}</button>`).join('')}</div></div>
+      <label class="f"><span>Size (width = height)</span><input type="number" id="qdsize" step="any" min="0.5" value="${d.size}" inputmode="decimal"></label>
+      <div class="full chips" id="qdpre"></div>
+      <label class="f"><span>File type</span><select id="qdfmt"><option value="png">PNG — image</option><option value="pdf">PDF — print-ready, exact size</option><option value="svg">SVG — vector, for designers</option></select></label>
+      <label class="f" id="qddpiw"><span>Print quality (DPI)</span><select id="qddpi">${[150, 300, 600, 1200].map(v => `<option value="${v}">${v} DPI${v === 300 ? ' — recommended' : v === 600 ? ' — very sharp' : v === 1200 ? ' — maximum' : ''}</option>`).join('')}</select></label>
+      <label class="f"><span>White border (quiet zone)</span><select id="qdmargin">${[0, 1, 2, 4, 6].map(v => `<option value="${v}">${v === 0 ? 'None' : v + ' blocks'}${v === 2 ? ' — recommended' : ''}</option>`).join('')}</select></label>
+      <label class="f"><span>Damage protection</span><select id="qdecl"><option value="L">Low (7%)</option><option value="M">Medium (15%) — recommended</option><option value="Q">High (25%)</option><option value="H">Highest (30%)</option></select></label>
+      <label class="f"><span>QR colour</span><input type="color" id="qdfg" value="${d.fg}"></label>
+      <label class="f"><span>Background</span><input type="color" id="qdbg" value="${d.bg}"></label>
+    </div><div class="alert warn small" id="qdwarn" style="display:none"></div></div></div>`;
+  const m = modal({ title: title || 'Download QR code', size: 'wide', body, actions: [{ label: 'Close' }, { label: '⬇ Download', cls: 'primary', close: false, onClick: () => go() }] });
+  const $m = s => $(s, m.el);
+  $m('#qdfmt').value = d.format; $m('#qddpi').value = d.dpi; $m('#qdmargin').value = d.margin; $m('#qdecl').value = d.ecl;
+  const read = () => ({ unit: d.unit, size: Number($m('#qdsize').value) || 5, format: $m('#qdfmt').value, dpi: Number($m('#qddpi').value), margin: Number($m('#qdmargin').value), ecl: $m('#qdecl').value, fg: $m('#qdfg').value, bg: $m('#qdbg').value });
+  const qs = (o, extra = {}, pid) => new URLSearchParams(Object.assign({ unit: o.unit, size: o.size, format: o.format, dpi: o.dpi, margin: o.margin, ecl: o.ecl, fg: o.fg.slice(1), bg: o.bg.slice(1) }, target ? { target } : { id: pid || id }, extra)).toString();
+  let tmr;
+  const refresh = () => {
+    const o = read(); Object.assign(d, o); try { localStorage.setItem('bx_qrdl', JSON.stringify(d)); } catch (e) { }
+    $m('#qdpre').innerHTML = presets[o.unit].map(v => `<button type="button" class="chip ${Number(v) === o.size ? 'on' : ''}" data-v="${v}">${v} ${o.unit}</button>`).join('');
+    $$('#qdpre .chip', m.el).forEach(b => b.onclick = () => { $m('#qdsize').value = b.dataset.v; refresh(); });
+    $$('#qdunit button', m.el).forEach(b => b.classList.toggle('on', b.dataset.u === o.unit));
+    $m('#qddpiw').style.display = o.format === 'png' ? '' : 'none';
+    const inch = o.size / { mm: 25.4, cm: 2.54, in: 1 }[o.unit]; const px = Math.round(inch * o.dpi);
+    const mm = (inch * 25.4).toFixed(1), cm = (inch * 2.54).toFixed(2), ins = inch.toFixed(2);
+    $m('#qdinfo').innerHTML = `<b>${mm} × ${mm} mm</b> = ${cm} × ${cm} cm = ${ins} × ${ins} in${o.format === 'png' ? `<br>${px} × ${px} pixels at ${o.dpi} DPI` : `<br>Vector — sharp at any size`}`;
+    const w = []; if (inch < 0.8) w.push('Very small codes can be hard to scan. 2.5 cm (1 inch) or bigger is safer.');
+    if (o.format === 'png' && px > 12000) w.push('Too big for PNG at this DPI — lower the DPI or choose PDF / SVG.');
+    if (o.margin === 0) w.push('Without a white border some phones cannot read the code — keep at least 2 blocks unless your design already has white space around it.');
+    $m('#qdwarn').style.display = w.length ? '' : 'none'; $m('#qdwarn').innerHTML = w.join('<br>');
+    clearTimeout(tmr); tmr = setTimeout(() => { $m('#qdimg').src = '/api/app/qr/download?' + qs(Object.assign({}, o, { format: 'svg' }), { inline: 1 }, previewId); }, 150);
+  };
+  $$('#qdunit button', m.el).forEach(b => b.onclick = () => {
+    const o = read(); const inch = o.size / { mm: 25.4, cm: 2.54, in: 1 }[o.unit]; d.unit = b.dataset.u;
+    const v = inch * { mm: 25.4, cm: 2.54, in: 1 }[d.unit]; $m('#qdsize').value = d.unit === 'mm' ? Math.round(v) : Math.round(v * 100) / 100; refresh();
+  });
+  ['#qdsize', '#qdfmt', '#qddpi', '#qdmargin', '#qdecl', '#qdfg', '#qdbg'].forEach(s => { $m(s).addEventListener('input', refresh); $m(s).addEventListener('change', refresh); });
+  const go = async () => {
+    const o = read(); const res = await fetch('/api/app/qr/download?' + qs(o), { credentials: 'same-origin' });
+    if (!res.ok) { let msg = 'Download failed'; try { msg = (await res.json()).error || msg; } catch (e) { } throw new Error(msg); }
+    const cd = res.headers.get('Content-Disposition') || ''; const name = (/filename="([^"]+)"/.exec(cd) || [])[1] || 'qr.' + o.format;
+    const blob = await res.blob(); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast('Downloaded: ' + name, 'ok'); return false;
+  };
+  refresh();
+  return m;
+}
+
+// ================= guest menu design (themes) =================
+async function themeEditor(box) {
+  const d = await GET('/api/app/settings'); const s = d.settings;
+  let T = resolveTheme(s.menu_theme || {}); if (!(s.menu_theme || {}).primary && s.color && T.preset === 'classic') T.primary = s.color;
+  let mlang = s.menu_lang || 'bn'; let dev = 'phone';
+  const url = `/m/${d.tenant.slug}?preview=1`;
+  box.innerHTML = `<div class="themed"><div class="card tctl">
+      <h3 class="mt0">1. Pick a style</h3><div class="tgal" id="tgal">${Object.entries(MENU_PRESETS).map(([k, p]) => `<button type="button" class="tsw" data-k="${k}"><span class="tsw-p" style="background:${p.bg}"><i style="background:${p.header}"></i><b style="background:${p.card};border-color:${themeMix(p.card, p.text, .12)}"><em style="background:${p.primary}"></em></b><b style="background:${p.card};border-color:${themeMix(p.card, p.text, .12)}"><em style="background:${p.accent}"></em></b></span><span class="tsw-n">${esc(p.name)}</span></button>`).join('')}</div>
+      <h3>2. Layout</h3><div class="chips" id="tlay">${Object.entries(MENU_LAYOUTS).map(([k, l]) => `<button type="button" class="chip" data-l="${k}">${esc(l)}</button>`).join('')}</div>
+      <h3>3. Colours</h3><div class="tcols">${[['primary', 'Buttons & highlights'], ['accent', 'Offers & badges'], ['header', 'Top header'], ['bg', 'Page background'], ['card', 'Item cards'], ['text', 'Text']].map(([k, l]) => `<label class="tcol"><input type="color" data-c="${k}"><span>${l}</span></label>`).join('')}</div>
+      <h3>4. Style details</h3><div class="fgrid">
+        <label class="f"><span>Font</span><select id="tfont">${Object.entries(MENU_FONTS).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label>
+        <label class="f"><span>Corner roundness: <b id="trv"></b></span><input type="range" id="trad" min="0" max="28" step="1"></label>
+        <label class="check"><input type="checkbox" id="timg"> Show food photos</label><label class="check"><input type="checkbox" id="tdesc"> Show descriptions</label>
+        <label class="f"><span>Menu language for guests (default)</span><select id="tlang"><option value="bn">বাংলা (Bangla)</option><option value="en">English</option></select></label>
+        <div class="f"><span>Cover photo (top of menu)</span><div class="row" style="gap:6px"><label class="btn sm">📷 Upload<input type="file" accept="image/*" id="tcov" hidden></label><button type="button" class="btn sm" id="tcovx">Remove</button></div></div>
+      </div>
+      <div class="row mt" style="position:sticky;bottom:0;background:var(--card);padding:10px 0;border-top:1px solid var(--line)"><button class="btn primary" id="tsave">💾 Save design</button><button type="button" class="btn" id="treset">Reset to style</button><a class="btn ghost" href="/m/${esc(d.tenant.slug)}" target="_blank" rel="noopener">Open live menu ↗</a></div>
+    </div>
+    <div class="tprev"><div class="seg" id="tdev" style="max-width:260px;margin:0 auto 10px"><button type="button" data-d="phone">📱 Phone</button><button type="button" data-d="tablet">Tablet</button><button type="button" data-d="desktop">🖥 Desktop</button></div>
+      <div class="tframe" id="tframe"><iframe id="tif" title="Menu preview" src="${url}#${encodeURIComponent(JSON.stringify(T))}"></iframe></div><p class="small muted center">Live preview — changes show instantly. Guests see it after you save.</p></div></div>`;
+  const ifr = $('#tif');
+  const push = () => { try { ifr.contentWindow.postMessage({ type: 'bx-theme', theme: T }, location.origin); } catch (e) { } };
+  const draw = () => {
+    $$('#tgal .tsw').forEach(b => b.classList.toggle('on', b.dataset.k === T.preset));
+    $$('#tlay .chip').forEach(b => b.classList.toggle('on', b.dataset.l === T.layout));
+    $$('[data-c]').forEach(i => { i.value = T[i.dataset.c]; });
+    $('#tfont').value = T.font; $('#trad').value = T.radius; $('#trv').textContent = T.radius + 'px';
+    $('#timg').checked = T.show_images; $('#tdesc').checked = T.show_desc; $('#tlang').value = mlang;
+    $('#tcovx').style.display = T.cover_id ? '' : 'none';
+    $$('#tdev button').forEach(b => b.classList.toggle('on', b.dataset.d === dev)); $('#tframe').className = 'tframe ' + dev; $('.themed').classList.toggle('wide', dev !== 'phone');
+    push();
+  };
+  $$('#tgal .tsw').forEach(b => b.onclick = () => { const keep = { show_images: T.show_images, show_desc: T.show_desc, cover_id: T.cover_id }; T = Object.assign(resolveTheme({ preset: b.dataset.k }), keep); draw(); });
+  $$('#tlay .chip').forEach(b => b.onclick = () => { T.layout = b.dataset.l; if (b.dataset.l !== 'compact' && !T.show_images && b.dataset.l !== 'list') T.show_images = true; draw(); });
+  $$('[data-c]').forEach(i => i.oninput = () => { T[i.dataset.c] = i.value; push(); });
+  $('#tfont').onchange = e => { T.font = e.target.value; draw(); };
+  $('#trad').oninput = e => { T.radius = Number(e.target.value); $('#trv').textContent = T.radius + 'px'; push(); };
+  $('#timg').onchange = e => { T.show_images = e.target.checked; if (!T.show_images && (T.layout === 'grid' || T.layout === 'magazine')) T.layout = 'list'; draw(); };
+  $('#tdesc').onchange = e => { T.show_desc = e.target.checked; draw(); };
+  $('#tlang').onchange = e => { mlang = e.target.value; };
+  $('#treset').onclick = () => { T = Object.assign(resolveTheme({ preset: T.preset }), { cover_id: T.cover_id }); draw(); };
+  $('#tcov').onchange = async e => { const f = e.target.files[0]; if (!f) return; const r = await POST('/api/app/upload', { data: await imageToDataURL(f, 1600) }); T.cover_id = r.id; draw(); toast('Cover photo added', 'ok'); };
+  $('#tcovx').onclick = () => { T.cover_id = null; draw(); };
+  $$('#tdev button').forEach(b => b.onclick = () => { dev = b.dataset.d; draw(); });
+  window.addEventListener('message', function onReady(e) { if (e.origin === location.origin && e.data && e.data.type === 'bx-preview-ready') push(); });
+  $('#tsave').onclick = async () => { const b = $('#tsave'); b.disabled = true; try { await PUT('/api/app/settings', { settings: { menu_theme: T, menu_lang: mlang } }); toast('Menu design saved ✓', 'ok'); } catch (e) { errToast(e); } finally { b.disabled = false; } };
+  draw();
 }

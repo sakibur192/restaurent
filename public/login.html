@@ -1,7 +1,8 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Login</title>
 <link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/css/app.css"></head><body>
-<div class="pub"><div class="auth">
+<div class="pub"><div class="auth" style="position:relative">
   <a class="logo" href="/" id="brand"><div class="m">B</div> <span>Baybex Restaurant</span></a>
+<div style="display:flex;justify-content:flex-end;margin-bottom:8px" id="lt"></div>
   <div class="card">
     <div class="tabs" style="margin-top:-6px"><button class="on" data-t="pw">Password login</button><button data-t="pin">Quick PIN (staff)</button></div>
     <label class="f"><span>Restaurant ID</span><input id="slug" placeholder="e.g. spicehouse" autocomplete="organization" autocapitalize="none"></label>
@@ -17,7 +18,7 @@
     <p class="center small muted mt">New restaurant? <a href="/signup">Start your free trial</a></p>
   </div>
 </div></div>
-<script src="/js/lib.js"></script>
+<script src="/js/bn.js"></script><script src="/js/i18n.js"></script><script>I18N.init((function(){try{return localStorage.getItem('bx_site_def')}catch(e){}})()||'bn')</script><script src="/js/lib.js"></script>
 <script>
 const qs = new URLSearchParams(location.search);
 $('#slug').value = qs.get('r') || localStorage.getItem('bx_slug') || '';
@@ -36,4 +37,6 @@ $('#pin .pinpad').innerHTML = [1,2,3,4,5,6,7,8,9,'C',0,'GO'].map(k => `<button t
 const draw = () => $$('#pin .pindots i').forEach((d, i) => d.classList.toggle('f', i < pin.length));
 $$('#pin .pinpad button').forEach(b => b.onclick = () => { const k = b.dataset.k; if (k === 'C') pin = ''; else if (k === 'GO') { if (pin.length >= 4) login({ pin }); return; } else if (pin.length < 6) pin += k; draw(); });
 document.addEventListener('keydown', e => { if ($('#pin').style.display === 'none' || document.activeElement === $('#slug')) return; if (/^\d$/.test(e.key) && pin.length < 6) { pin += e.key; draw(); } else if (e.key === 'Backspace') { pin = pin.slice(0, -1); draw(); } else if (e.key === 'Enter' && pin.length >= 4) login({ pin }); });
+
+$('#lt').innerHTML = I18N.toggleHTML();
 </script></body></html>

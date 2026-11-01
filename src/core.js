@@ -28,7 +28,8 @@ const TENANT_DEFAULTS = {
   loyalty_enabled: true, points_per_amount: 100, point_value: 1, kds_enabled: true, table_cleaning: false,
   online_ordering: true, auto_accept_online: false, min_order: 0, banner: '', timezone: 'Asia/Dhaka', kds_delay_min: 15,
   sms_url: '', sms_events: { online_accept: true, ready: true, reservation: true }, logo_id: null,
-  approval_discount_pct: 0, online_payment_note: 'Pay on delivery, or send bKash/Nagad and enter the TrxID.'
+  approval_discount_pct: 0, online_payment_note: 'Pay on delivery, or send bKash/Nagad and enter the TrxID.',
+  menu_theme: { preset: 'classic' }, menu_lang: 'bn', ui_lang: 'en', cover_id: null
 };
 
 // ---- small utils ----
@@ -78,9 +79,39 @@ async function getSettings() {
   const rows = await db.all('SELECT key, value FROM settings');
   const s = JSON.parse(JSON.stringify(db.DEFAULT_SETTINGS));
   rows.forEach(r => { s[r.key] = r.value; });
+  normalizeSettings(s);
   settingsCache = s; settingsAt = Date.now(); return s;
 }
 function clearSettingsCache() { settingsCache = null; }
+// upgrade older saved settings to the current shape
+function normalizeSettings(s) {
+  const D = db.DEFAULT_SETTINGS;
+  const p = s.plan || {};
+  if (!Array.isArray(p.periods) || !p.periods.length) {
+    p.periods = JSON.parse(JSON.stringify(D.plan.periods));
+    if (p.price) { p.periods[0].price = Number(p.price); p.periods[0].days = Number(p.duration_days) || 30; }
+    if (p.yearly_price) p.periods[3].price = Number(p.yearly_price);
+  }
+  ['name_bn', 'note_bn', 'features_bn'].forEach(k => { if (p[k] === undefined) p[k] = JSON.parse(JSON.stringify(D.plan[k])); });
+  if (!p.trial_days && p.trial_days !== 0) p.trial_days = D.plan.trial_days;
+  const act = p.periods.filter(x => x.active !== false);
+  const first = act[0] || p.periods[0];
+  p.price = Number(first.price); p.duration_days = Number(first.days) || 30;   // kept for older screens
+  s.plan = p;
+  let L = s.landing || {};
+  if (!L.en || !L.bn) L = { en: Object.assign({}, D.landing.en, L.hero_title ? { hero_title: L.hero_title, hero_highlight: '', hero_sub: L.hero_sub, cta_primary: L.cta || D.landing.en.cta_primary } : {}), bn: D.landing.bn };
+  for (const lang of ['en', 'bn']) for (const k of Object.keys(D.landing[lang])) if (L[lang][k] === undefined) L[lang][k] = JSON.parse(JSON.stringify(D.landing[lang][k]));
+  s.landing = L;
+  if (!s.default_lang) s.default_lang = 'bn';
+  if (s.payment && s.payment.instructions_bn === undefined) s.payment.instructions_bn = D.payment.instructions_bn;
+  s.seo = Object.assign({}, D.seo, s.seo || {});
+  return s;
+}
+// find a billing period by months (or index); only active ones
+function findPeriod(plan, months) {
+  const act = (plan.periods || []).filter(x => x.active !== false);
+  return act.find(x => Number(x.months) === Number(months)) || act[0];
+}
 
 // ---- sessions ----
 async function createSession(req, res, kind, userId, tenantId, branchId, impersonated = false) {
@@ -253,6 +284,6 @@ const slugify = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').r
 
 module.exports = {
   PERMS, DEFAULT_ROLES, TENANT_DEFAULTS, r2, num, int, token, str, hash, check, HttpError, fail, wrap,
-  parseCookies, setCookie, rateLimit, failGuard, failHit, getSettings, clearSettingsCache, createSession, destroySession,
+  parseCookies, setCookie, rateLimit, normalizeSettings, findPeriod, failGuard, failHit, getSettings, clearSettingsCache, createSession, destroySession,
   requireSuper, requireUser, can, approve, audit, notify, sendSMS, createTenant, slugify
 };

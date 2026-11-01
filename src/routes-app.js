@@ -22,7 +22,7 @@ r.get('/me', U(null, { allowInactive: true }), wrap(async (req, res) => {
     user: req.user, tenant: Object.assign(t, { status: req.tenant.status, settings: req.tenant.settings }), branch_id: req.branchId,
     branch_locked: !!req.user.branch_id, branches, perm_labels: c.PERMS, announcements: ann, unread: unread.n,
     brand: { name: s.brand.name, logo_id: s.brand.logo_id, color: s.brand.color, phone: s.brand.phone, email: s.brand.email },
-    plan: { name: s.plan.name, price: s.plan.price, duration_days: s.plan.duration_days }
+    plan: { name: s.plan.name, name_bn: s.plan.name_bn, price: s.plan.price, duration_days: s.plan.duration_days, periods: s.plan.periods.filter(x => x.active !== false) }, default_lang: s.default_lang
   });
 }));
 r.get('/meta', U(null), wrap(async (req, res) => {
@@ -91,6 +91,15 @@ r.put('/settings', U('settings'), wrap(async (req, res) => {
   s.payment_methods = (Array.isArray(s.payment_methods) ? s.payment_methods : []).map(x => String(x).trim()).filter(Boolean).slice(0, 15);
   if (!s.payment_methods.includes('Cash')) s.payment_methods.unshift('Cash');
   s.order_sources = (Array.isArray(s.order_sources) ? s.order_sources : []).map(x => String(x).trim()).filter(Boolean).slice(0, 15);
+  if (s.menu_theme && typeof s.menu_theme === 'object') {
+    const T = s.menu_theme, hex = v => /^#[0-9a-f]{6}$/i.test(v || '') ? v : undefined;
+    s.menu_theme = { preset: str(T.preset, 30) || 'classic', layout: ['list', 'grid', 'compact', 'magazine'].includes(T.layout) ? T.layout : undefined,
+      primary: hex(T.primary), accent: hex(T.accent), bg: hex(T.bg), card: hex(T.card), text: hex(T.text), header: hex(T.header),
+      font: ['sans', 'serif', 'rounded'].includes(T.font) ? T.font : undefined, radius: Math.max(0, Math.min(28, int(T.radius, 14))),
+      show_images: T.show_images !== false, show_desc: T.show_desc !== false, cover_id: int(T.cover_id) || null };
+  } else s.menu_theme = { preset: 'classic' };
+  if (!['bn', 'en'].includes(s.menu_lang)) s.menu_lang = 'bn';
+  if (!['bn', 'en'].includes(s.ui_lang)) s.ui_lang = 'en';
   if (s.sms_url && !/^https?:\/\//i.test(s.sms_url)) fail(400, 'SMS gateway URL must start with http:// or https://');
   try { new Intl.DateTimeFormat('en', { timeZone: s.timezone }); } catch (e) { fail(400, 'Invalid time zone'); }
   const t = b.tenant || {};
@@ -196,12 +205,13 @@ r.post('/billing/pay', U(null, { allowInactive: true }), wrap(async (req, res) =
   if (!req.user.is_owner && !c.can(req, 'settings')) fail(403, 'Only the owner can submit payments');
   const b = req.body || {}; const s = await c.getSettings();
   if (!b.trx_id || !b.method) fail(400, 'Payment method and transaction ID are required');
-  const yearly = b.period === 'yearly' && num(s.plan.yearly_price) > 0;
-  const amount = yearly ? num(s.plan.yearly_price) : num(s.plan.price);
-  const days = yearly ? 365 : int(s.plan.duration_days, 30);
+  const per = c.findPeriod(s.plan, b.months || (b.period === 'yearly' ? 12 : 1));
+  if (!per) fail(400, 'No billing period is available. Please contact support.');
+  if (b.months && Number(per.months) !== Number(b.months)) fail(400, 'This billing period is not available any more. Please refresh the page and choose again.');
+  const amount = Number(per.price), days = Number(per.days) || Math.round(Number(per.months) * 30);
   const dup = await db.one(`SELECT 1 FROM sub_payments WHERE trx_id=$1 AND status<>'rejected'`, [str(b.trx_id, 80)]);
   if (dup) fail(400, 'This transaction ID was already submitted');
-  await db.q('INSERT INTO sub_payments(tenant_id,amount,method,trx_id,sender,days) VALUES($1,$2,$3,$4,$5,$6)', [req.tid, num(b.amount, amount) || amount, str(b.method, 40), str(b.trx_id, 80), str(b.sender, 40), days]);
+  await db.q('INSERT INTO sub_payments(tenant_id,amount,method,trx_id,sender,days) VALUES($1,$2,$3,$4,$5,$6)', [req.tid, amount, str(b.method, 40), str(b.trx_id, 80), str(b.sender, 40), days]);
   res.json({ ok: true });
 }));
 
@@ -537,6 +547,35 @@ r.get('/qr/menu', U(null), wrap(async (req, res) => {
   const svg = await QRCode.toString(url, { type: 'svg', margin: 1, width: 300 });
   res.setHeader('Content-Type', 'image/svg+xml'); res.end(svg);
 }));
+// High-quality QR download: exact size in mm / cm / in, square. format: png | svg | pdf. target: table (id or 'all' → zip) | menu | kiosk
+r.get('/qr/download', U(['tables', 'settings', 'pos']), wrap(async (req, res) => {
+  const QR = require('./qr');
+  const q = req.query;
+  const unit = ['mm', 'cm', 'in'].includes(q.unit) ? q.unit : 'cm';
+  const size = Math.max(0.5, Math.min(unit === 'mm' ? 1000 : unit === 'cm' ? 100 : 40, num(q.size, 5)));
+  const fmtx = ['png', 'svg', 'pdf'].includes(q.format) ? q.format : 'png';
+  const opts = { size, unit, dpi: int(q.dpi, 300), margin: int(q.margin, 2), ecl: String(q.ecl || 'M').toUpperCase(), fg: q.fg, bg: q.bg };
+  if (QR.toInches(size, unit) * Math.min(1200, opts.dpi) > 12000 && fmtx === 'png') fail(400, 'This size is too big for PNG at this DPI. Lower the DPI or choose SVG/PDF.');
+  const label = `${size}${unit}`;
+  const make = (url) => fmtx === 'png' ? QR.png(url, opts).buffer : fmtx === 'svg' ? Buffer.from(QR.svg(url, opts)) : QR.pdf(url, opts);
+  const mime = { png: 'image/png', svg: 'image/svg+xml', pdf: 'application/pdf' }[fmtx];
+  const safe = s => String(s).replace(/[^\w\-]+/g, '_');
+  const send = (buf, name, type) => { res.setHeader('Content-Type', type); res.setHeader('Content-Disposition', `${q.inline ? 'inline' : 'attachment'}; filename="${name}"`); res.end(buf); };
+  if (q.target === 'menu' || q.target === 'kiosk') {
+    const url = `${origin(req)}/m/${req.tenant.slug}${q.target === 'kiosk' ? '?kiosk=1' : int(q.branch) ? '?branch=' + int(q.branch) : ''}`;
+    return send(make(url), `${safe(req.tenant.slug)}-${q.target}-qr-${label}.${fmtx}`, mime);
+  }
+  if (q.id === 'all') {
+    const rows = await db.all('SELECT name, qr_token FROM tables WHERE tenant_id=$1 AND branch_id=$2 ORDER BY name', [req.tid, req.branchId]);
+    if (!rows.length) fail(404, 'No tables in this branch');
+    const files = rows.map(t => ({ name: `table-${safe(t.name)}-${label}.${fmtx}`, data: make(`${origin(req)}/m/${req.tenant.slug}?t=${t.qr_token}`) }));
+    return send(QR.zip(files), `${safe(req.tenant.slug)}-table-qr-codes-${label}.zip`, 'application/zip');
+  }
+  const t = await db.one('SELECT name, qr_token FROM tables WHERE id=$1 AND tenant_id=$2', [int(q.id), req.tid]);
+  if (!t) fail(404, 'Table not found');
+  send(make(`${origin(req)}/m/${req.tenant.slug}?t=${t.qr_token}`), `table-${safe(t.name)}-qr-${label}.${fmtx}`, mime);
+}));
+
 r.get('/qr/tables', U(['tables', 'settings']), wrap(async (req, res) => {
   const rows = await db.all('SELECT t.id, t.name, t.qr_token, f.name floor_name FROM tables t LEFT JOIN floors f ON f.id=t.floor_id WHERE t.tenant_id=$1 AND t.branch_id=$2 ORDER BY t.name', [req.tid, req.branchId]);
   for (const t of rows) {

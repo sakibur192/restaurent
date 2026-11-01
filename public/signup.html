@@ -2,6 +2,7 @@
 <link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/css/app.css"></head><body>
 <div class="pub"><div class="auth" style="max-width:560px">
   <a class="logo" href="/" id="brand"><div class="m">B</div> <span>Baybex Restaurant</span></a>
+<div style="display:flex;justify-content:flex-end;margin-bottom:8px" id="lt"></div>
   <div class="card">
     <h2 class="center">Start your free trial</h2>
     <p class="center muted mt0" id="trial">All features included. No card needed.</p>
@@ -21,12 +22,13 @@
     <p class="center small muted">Already registered? <a href="/login">Log in</a></p>
   </div>
 </div></div>
-<script src="/js/lib.js"></script>
+<script src="/js/bn.js"></script><script src="/js/i18n.js"></script><script>I18N.init((function(){try{return localStorage.getItem('bx_site_def')}catch(e){}})()||'bn')</script><script src="/js/lib.js"></script>
 <script>
 GET('/api/public/site').then(s => {
   $('#brand span').textContent = s.brand.name; document.title = 'Start free trial — ' + s.brand.name;
   if (s.brand.logo_id) $('#brand .m').innerHTML = `<img src="/f/${s.brand.logo_id}" style="width:100%;height:100%;object-fit:cover">`;
-  $('#trial').textContent = `${s.plan.trial_days} days free · All features included · then ${CUR}${s.plan.price}/${s.plan.duration_days === 30 ? 'month' : s.plan.duration_days + ' days'}`;
+  { const ps = s.plan.periods || []; const m1 = ps.find(x => Number(x.months) === 1) || ps[0]; const want = ps.find(x => String(x.months) === new URLSearchParams(location.search).get('period'));
+    $('#trial').textContent = `${s.plan.trial_days} days free · All features included` + (m1 ? ` · then ${CUR}${Number(m1.price).toLocaleString('en-IN')}/month` : '') + (want && want !== m1 ? ` (${want.label_en}: ${CUR}${Number(want.price).toLocaleString('en-IN')})` : ''); }
   if (!s.signup_enabled) { $('#f').innerHTML = '<div class="alert warn full">New signups are paused right now. Please contact us: ' + esc(s.brand.phone) + '</div>'; }
 });
 const f = $('#f');
@@ -40,4 +42,6 @@ f.onsubmit = async e => {
   try { const r = await POST('/api/public/signup', d); localStorage.setItem('bx_slug', r.slug); location.href = '/app#/welcome'; }
   catch (err) { errToast(err); $('#go').disabled = false; $('#go').textContent = 'Create my restaurant'; }
 };
+
+$('#lt').innerHTML = I18N.toggleHTML();
 </script></body></html>

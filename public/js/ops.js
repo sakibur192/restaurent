@@ -38,9 +38,11 @@ APP.pages.tables = async (el, params) => {
   if (tab === 'floors') return crudPage(box, 'floors', { addLabel: 'Add floor / section', importable: false });
   if (tab === 'qr') {
     const rows = await GET('/api/app/qr/tables');
-    box.innerHTML = `<div class="page-h"><p class="muted mt0">Print and place these on each table. Guests scan → see the menu → order. Orders arrive in Orders → Online & QR.</p><button class="btn primary" id="pq">🖨 Print all</button></div>
-      <div class="grid g4">${rows.map(r => `<div class="qrcard"><b style="font-size:18px">Table ${esc(r.name)}</b><div class="small muted">${esc(r.floor_name || '')}</div>${r.svg}<div class="small">Scan to see menu & order</div><button class="btn sm mt noprint" data-rg="${r.id}">New code</button></div>`).join('')}</div>`;
+    box.innerHTML = `<div class="page-h"><p class="muted mt0">Print and place these on each table. Guests scan → see the menu → order. Orders arrive in Orders → Online & QR.</p><div class="row"><button class="btn" id="pq">🖨 Print all</button>${rows.length ? `<button class="btn primary" id="pqz">⬇ Download all (ZIP)</button>` : ''}</div></div>
+      <div class="grid g4">${rows.map(r => `<div class="qrcard"><b style="font-size:18px">Table ${esc(r.name)}</b><div class="small muted">${esc(r.floor_name || '')}</div>${r.svg}<div class="small">Scan to see menu & order</div><div class="row mt noprint" style="justify-content:center;gap:6px"><button class="btn sm primary" data-qd="${r.id}" data-n="${esc(r.name)}">⬇ Download</button><button class="btn sm" data-rg="${r.id}">New code</button></div></div>`).join('')}</div>`;
     $('#pq').onclick = () => printHTML(`<div class="qrgrid">${rows.map(r => `<div class="qrcard"><h2>${esc(APP.me.tenant.name)}</h2><b style="font-size:22px">Table ${esc(r.name)}</b>${r.svg}<div>Scan to view menu & order</div></div>`).join('')}</div>`, { title: 'Table QR codes' });
+    $$('[data-qd]', box).forEach(b => b.onclick = () => qrDownload({ id: b.dataset.qd, title: 'Download QR — Table ' + b.dataset.n }));
+    if ($('#pqz')) $('#pqz').onclick = () => qrDownload({ id: 'all', previewId: rows[0].id, title: `Download all ${rows.length} table QR codes (ZIP)` });
     $$('[data-rg]', box).forEach(b => b.onclick = async () => { if (await confirmBox('Make a new QR code for this table? The old printed code will stop working.')) { await POST(`/api/app/tables/${b.dataset.rg}/regen-qr`); APP.route(); } });
     return;
   }

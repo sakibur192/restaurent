@@ -156,7 +156,7 @@ r.post('/payments/:id/:action(approve|reject)', wrap(async (req, res) => {
 // ---- platform settings (brand, plan, payment, landing, signup) ----
 r.get('/settings', wrap(async (req, res) => { c.clearSettingsCache(); res.json(await c.getSettings()); }));
 r.put('/settings', wrap(async (req, res) => {
-  const allowed = ['brand', 'plan', 'payment', 'landing', 'signup_enabled', 'seo'];
+  const allowed = ['brand', 'plan', 'payment', 'landing', 'signup_enabled', 'seo', 'default_lang'];
   for (const k of allowed) if (req.body[k] !== undefined) {
     await db.q(`INSERT INTO settings(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=$2`, [k, JSON.stringify(req.body[k])]);
   }
@@ -166,6 +166,40 @@ r.put('/settings', wrap(async (req, res) => {
 r.post('/upload', wrap(async (req, res) => {
   const f = await saveImage(null, req.body.data);
   res.json({ id: f });
+}));
+
+// ---- downloads (PDF manuals / brochures shown on the landing page) ----
+r.get('/downloads', wrap(async (req, res) => res.json(await db.all('SELECT * FROM downloads ORDER BY sort, id'))));
+r.post('/downloads/upload', express.raw({ type: ['application/pdf', 'application/octet-stream'], limit: '60mb' }), wrap(async (req, res) => {
+  const buf = req.body;
+  if (!Buffer.isBuffer(buf) || buf.length < 100) fail(400, 'Please choose a PDF file');
+  if (buf.slice(0, 5).toString() !== '%PDF-') fail(400, 'Only PDF files can be uploaded');
+  const f = await db.one('INSERT INTO files(tenant_id,mime,data) VALUES(NULL,$1,$2) RETURNING id', ['application/pdf', buf]);
+  const q = req.query;
+  const filename = (str(q.filename, 120) || 'document.pdf').replace(/[^\w.\- ]+/g, '_');
+  let row;
+  if (int(q.id)) {
+    const old = await db.one('SELECT file_id FROM downloads WHERE id=$1', [int(q.id)]);
+    if (!old) fail(404, 'Not found');
+    row = await db.one('UPDATE downloads SET file_id=$2, filename=$3, size=$4 WHERE id=$1 RETURNING *', [int(q.id), f.id, filename, buf.length]);
+    if (old.file_id) await db.q('DELETE FROM files WHERE id=$1 AND tenant_id IS NULL', [old.file_id]);
+  } else {
+    row = await db.one(`INSERT INTO downloads(kind,lang,title_en,title_bn,file_id,filename,size,sort) VALUES($1,$2,$3,$4,$5,$6,$7,(SELECT COALESCE(max(sort),0)+1 FROM downloads)) RETURNING *`,
+      [['manual', 'brochure', 'other'].includes(q.kind) ? q.kind : 'manual', ['en', 'bn', 'both'].includes(q.lang) ? q.lang : 'en', str(q.title_en, 200) || filename, str(q.title_bn, 200) || filename, f.id, filename, buf.length]);
+  }
+  res.json(row);
+}));
+r.put('/downloads/:id', wrap(async (req, res) => {
+  const b = req.body;
+  const row = await db.one('UPDATE downloads SET kind=$2, lang=$3, title_en=$4, title_bn=$5, desc_en=$6, desc_bn=$7, sort=$8, active=$9 WHERE id=$1 RETURNING *',
+    [int(req.params.id), ['manual', 'brochure', 'other'].includes(b.kind) ? b.kind : 'manual', ['en', 'bn', 'both'].includes(b.lang) ? b.lang : 'en', str(b.title_en, 200), str(b.title_bn, 200), str(b.desc_en, 500), str(b.desc_bn, 500), int(b.sort, 0), b.active !== false]);
+  if (!row) fail(404, 'Not found');
+  res.json(row);
+}));
+r.delete('/downloads/:id', wrap(async (req, res) => {
+  const row = await db.one('DELETE FROM downloads WHERE id=$1 RETURNING file_id', [int(req.params.id)]);
+  if (row && row.file_id) await db.q('DELETE FROM files WHERE id=$1 AND tenant_id IS NULL', [row.file_id]);
+  res.json({ ok: true });
 }));
 
 // ---- announcements ----

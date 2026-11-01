@@ -138,7 +138,25 @@ hr{border:none;border-top:1px solid var(--line);margin:14px 0}
 .pos-actions .btn{padding:13px 6px}
 .posbar{display:flex;gap:6px;align-items:center;padding:8px 0}
 @media(max-width:1100px){.pos{grid-template-columns:minmax(0,1fr) 340px}}
-@media(max-width:820px){.pos{grid-template-columns:1fr;height:auto;overflow:visible}.pos .rp{border-left:none;border-top:1px solid var(--line)}.pgrid{max-height:55vh}}
+
+.cartbar{display:none}.rp-in{display:flex;flex-direction:column;flex:1;min-height:0}
+.pgrid{grid-auto-rows:max-content}
+@media(max-width:820px){
+  .pos{display:block;height:auto;overflow:visible}
+  .pos .lp{height:calc(100vh - 58px - 66px);height:calc(100dvh - 58px - 66px);padding:10px 10px 0}
+  .pgrid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+  .pcard .im{height:64px;font-size:22px}
+  .pos .rp{position:fixed;left:0;right:0;bottom:0;top:58px;z-index:45;border-left:none;border-radius:18px 18px 0 0;box-shadow:0 -10px 30px rgba(11,37,69,.18);transform:translateY(calc(100% - 66px - env(safe-area-inset-bottom)));transition:transform .28s cubic-bezier(.2,.8,.2,1);will-change:transform}
+  .pos .rp.open{transform:none}
+  .cartbar{display:flex;align-items:center;justify-content:space-between;gap:10px;height:66px;flex:none;width:100%;border:none;background:var(--navy);color:#fff;font:inherit;font-size:15px;padding:0 18px env(safe-area-inset-bottom);border-radius:18px 18px 0 0;cursor:pointer}
+  .cartbar.has{background:var(--brand)} .cartbar .cb-ch{display:inline-block;transition:transform .25s;margin-left:6px} .rp.open .cartbar .cb-ch{transform:rotate(180deg)}
+  .cartbar.bump{animation:bump .35s} @keyframes bump{40%{transform:scale(1.03)}}
+  .rp-in{overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .rp-in .cart{flex:none;overflow:visible;min-height:120px}
+  .pos-actions{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--line);padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+}
+@media(max-width:600px){.top .title{display:none}.top{padding:0 10px;gap:6px}.top select{max-width:46vw}}
+
 .paym{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
 .paym button{padding:12px 6px;border:2px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;font-weight:700}
 .paym button.on{border-color:var(--brand);background:var(--brand-l);color:var(--brand-d)}
@@ -189,3 +207,62 @@ hr{border:none;border-top:1px solid var(--line);margin:14px 0}
 .pricerows .pr-row{display:grid;grid-template-columns:1fr 120px 36px;gap:6px;margin-bottom:6px}
 .qrcard{border:1px solid var(--line);border-radius:12px;padding:12px;text-align:center;background:#fff;break-inside:avoid} .qrcard svg{width:100%;max-width:200px;height:auto}
 @media print{.noprint,.side,.top,.banner{display:none!important}.main{margin:0!important}.page{padding:0!important}body{background:#fff}.card{box-shadow:none;border:none}}
+/* billing period cards */
+.pergrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px}
+.percard{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;border:2px solid var(--line);background:#fff;border-radius:14px;padding:14px 12px 12px;cursor:pointer;font:inherit;color:inherit;transition:.15s}
+.percard:hover{border-color:#9ccfc8}.percard.on{border-color:var(--brand);background:var(--brand-l);box-shadow:0 6px 18px rgba(15,118,110,.15)}
+.percard .pamt{font:800 22px Inter,Hind;color:var(--navy)}
+.percard .pbdg{position:absolute;top:-10px;right:10px;background:var(--brand);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px}
+/* QR download */
+.qrdl{display:grid;grid-template-columns:240px 1fr;gap:20px;align-items:start}
+.qrprev{position:sticky;top:0}.qrbox{background:repeating-conic-gradient(#f1f5f9 0 25%,#fff 0 50%) 0 0/16px 16px;border:1px solid var(--line);border-radius:14px;padding:14px;aspect-ratio:1;display:grid;place-items:center}
+.qrbox img{width:100%;height:100%;object-fit:contain;image-rendering:pixelated}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;flex-wrap:wrap}
+.seg button{flex:1;border:none;background:#fff;padding:9px 6px;font:inherit;font-weight:600;font-size:13px;cursor:pointer;color:#334155;min-width:0}
+.seg button+button{border-left:1px solid var(--line)}.seg button.on{background:var(--navy);color:#fff}
+input[type=color]{height:42px;padding:4px;cursor:pointer}
+@media(max-width:700px){.qrdl{grid-template-columns:1fr}.qrprev{position:static;max-width:220px;margin:0 auto}}
+/* menu design editor */
+.themed{display:grid;grid-template-columns:minmax(0,1fr) 430px;gap:18px;align-items:start}
+.tctl h3{font-size:15px;margin:18px 0 10px}
+.tgal{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:10px}
+.tsw{border:2px solid var(--line);border-radius:14px;background:#fff;padding:6px;cursor:pointer;display:flex;flex-direction:column;gap:6px;font:inherit;transition:.15s}
+.tsw:hover{border-color:#9ccfc8}.tsw.on{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-l)}
+.tsw-p{display:flex;flex-direction:column;gap:4px;height:74px;border-radius:9px;padding:0 0 6px;overflow:hidden;border:1px solid rgba(0,0,0,.06)}
+.tsw-p i{display:block;height:20px}.tsw-p b{display:flex;align-items:center;margin:0 7px;height:18px;border:1px solid;border-radius:5px;padding:0 5px}.tsw-p em{margin-left:auto;width:16px;height:8px;border-radius:3px}
+.tsw-n{font-weight:700;font-size:12.5px;text-align:center}
+.tcols{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.tcol{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:6px 8px;cursor:pointer;font-size:13px;font-weight:600}
+.tcol input{width:34px;height:34px;padding:0;border:none;border-radius:8px;background:none;flex:none}
+.tprev{position:sticky;top:76px}
+.tframe{margin:0 auto;border:10px solid #0b1220;border-radius:34px;overflow:hidden;background:#fff;box-shadow:0 20px 50px rgba(11,37,69,.25);transition:width .25s}
+.tframe iframe{width:100%;height:100%;border:0;display:block}
+.tframe.phone{width:360px;height:700px;max-width:100%}.tframe.tablet{width:100%;height:700px;border-radius:24px}.tframe.desktop{width:100%;height:620px;border-width:8px;border-radius:12px}
+@media(max-width:1180px){.themed{grid-template-columns:1fr}.tprev{position:static;order:-1}.tframe.phone{height:560px}}
+@media(max-width:420px){.tframe.phone{width:100%;border-width:6px;border-radius:24px}}
+.themed.wide{grid-template-columns:1fr}.themed.wide .tprev{position:static;order:-1}.tframe.tablet{max-width:820px}
+
+/* touch smoothness */
+button,a,.btn,.chip,.pcard,.opt,label.check,select{touch-action:manipulation}
+html{-webkit-text-size-adjust:100%}
+@media(max-width:560px){.ov{padding:0;align-items:flex-end}.ov .modal{max-width:100%!important;border-radius:18px 18px 0 0;max-height:94vh;max-height:94dvh;display:flex;flex-direction:column;animation:sheet .22s cubic-bezier(.2,.8,.2,1)}
+ .ov .modal .mb{overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1}.ov .modal .mf{padding-bottom:calc(12px + env(safe-area-inset-bottom))}.ov .modal .mf .btn{flex:1}}
+@keyframes sheet{from{transform:translateY(40px);opacity:.4}}
+input,select,textarea{font-size:16px}
+@media(min-width:900px){input,select,textarea{font-size:inherit}}
+/* language switch */
+.langtg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;flex:none;background:#fff}
+.langtg button{border:none;background:transparent;padding:5px 9px;font:700 12px Inter,'Hind Siliguri',sans-serif;cursor:pointer;color:#475569;line-height:1.2}
+.langtg button.on{background:var(--navy);color:#fff}
+html.lang-bn body{font-family:Inter,'Hind Siliguri',system-ui,sans-serif}
+@media(max-width:700px){.hide-sm{display:none!important}}
+/* small-screen fixes */
+.grid>*{min-width:0}
+.img-up{flex-wrap:wrap}.img-up input[type=file]{min-width:0;max-width:100%;flex:1 1 160px}
+@media(max-width:600px){
+  .top select{flex:0 1 auto;min-width:0;max-width:calc(100vw - 236px);font-size:14px;padding:6px 8px}
+  .top .btn.ghost{padding-left:8px;padding-right:8px}.top .btn.ghost.icon{padding:6px}
+  .langtg button{padding:5px 7px}
+}
+@media(max-width:360px){.top .langtg button{padding:4px 5px;font-size:11px}}
+.fgrid>*{min-width:0} input[type=file]{max-width:100%}

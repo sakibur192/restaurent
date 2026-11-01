@@ -1,21 +1,22 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Order status</title>
+<!doctype html><html lang="en" data-langkey="bx_mlang"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Order status</title>
 <link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/css/app.css"><style>.steps{display:flex;justify-content:space-between;margin:22px 0;position:relative}.steps:before{content:'';position:absolute;top:17px;left:8%;right:8%;height:3px;background:var(--line)}
 .st{text-align:center;flex:1;position:relative;font-size:12px;font-weight:600;color:var(--muted)}.st i{display:grid;place-items:center;width:36px;height:36px;margin:0 auto 6px;border-radius:50%;background:#fff;border:3px solid var(--line);font-style:normal}.st.on{color:var(--navy)}.st.on i{background:var(--brand);border-color:var(--brand);color:#fff}</style></head><body>
 <div class="pub" style="align-items:flex-start"><div class="auth" style="max-width:520px"><div class="card" id="b"><div class="loading"><span class="spin"></span></div></div></div></div>
-<script src="/js/lib.js"></script><script>
+<script src="/js/bn.js"></script><script src="/js/i18n.js"></script><script src="/js/lib.js"></script><script src="/js/themes.js"></script><script>
 const tk = location.pathname.split('/')[2];
 async function load() {
   let d; try { d = await GET('/api/public/track/' + tk); } catch (e) { $('#b').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
   CUR = d.restaurant.currency; const o = d.order;
+  if (!window._li) { window._li = 1; I18N.init(d.restaurant.lang); if (d.restaurant.theme && window.resolveTheme) { const T = resolveTheme(d.restaurant.theme); document.documentElement.style.setProperty('--brand', T.primary); } }
   const cooking = d.items.some(i => ['new', 'preparing'].includes(i.kstatus)), ready = d.items.length && d.items.every(i => ['ready', 'served'].includes(i.kstatus));
   let step = o.status === 'pending' ? 0 : 1; if (cooking && d.items.some(i => i.kstatus === 'preparing')) step = 2; if (ready) step = 3; if (o.delivery_status === 'picked') step = 3; if (o.status === 'completed' && (o.type !== 'delivery' || o.delivery_status === 'delivered')) step = 4; if (o.delivery_status === 'delivered') step = 4;
   const labels = ['Received', 'Accepted', 'Cooking', o.type === 'delivery' ? 'On the way' : 'Ready', o.type === 'delivery' ? 'Delivered' : 'Done'];
   const bad = ['cancelled', 'rejected'].includes(o.status);
-  $('#b').innerHTML = `<div class="center"><div class="muted">${esc(d.restaurant.name)}</div><h1 style="margin:6px 0">Order #${o.order_no}</h1>${o.table ? `<span class="badge">Table ${esc(o.table)}</span>` : `<span class="badge">${esc(fmt.label(o.type))}</span>`}</div>
+  $('#b').innerHTML = `<div style="display:flex;justify-content:flex-end">${I18N.toggleHTML()}</div><div class="center"><div class="muted" data-notr>${esc(d.restaurant.name)}</div><h1 style="margin:6px 0">Order #${o.order_no}</h1>${o.table ? `<span class="badge">Table ${esc(o.table)}</span>` : `<span class="badge">${esc(fmt.label(o.type))}</span>`}</div>
     ${bad ? `<div class="alert bad mt center">This order was ${esc(o.status)}. Please contact the restaurant${d.restaurant.phone ? ': ' + esc(d.restaurant.phone) : ''}.</div>` : `<div class="steps">${labels.map((l, i) => `<div class="st ${i <= step ? 'on' : ''}"><i>${i < step ? '✓' : i + 1}</i>${l}</div>`).join('')}</div>
     <div class="center big bold" style="color:var(--brand)">${['⏳ Waiting for the restaurant to accept…', '✅ Accepted — the kitchen will start soon', '👨‍🍳 Your food is being prepared', o.type === 'delivery' ? '🛵 Your order is on the way' : '🍽 Your order is ready!', '🎉 Enjoy your meal!'][step]}</div>`}
     ${o.rider ? `<p class="center">Rider: <b>${esc(o.rider.name)}</b> <a href="tel:${esc(o.rider.phone || '')}">${esc(o.rider.phone || '')}</a></p>` : ''}
-    <hr>${d.items.map(i => `<div class="row between"><span>${fmt.num(i.qty)} × ${esc(i.name)}${i.variant ? ' (' + esc(i.variant) + ')' : ''}</span><span>${fmt.money(i.total)}</span></div>`).join('')}<hr>
+    <hr>${d.items.map(i => `<div class="row between"><span data-notr>${fmt.num(i.qty)} × ${esc(i.name)}${i.variant ? ' (' + esc(i.variant) + ')' : ''}</span><span>${fmt.money(i.total)}</span></div>`).join('')}<hr>
     ${n2(o.discount) ? `<div class="row between"><span>Discount</span><span>-${fmt.money(o.discount)}</span></div>` : ''}${n2(o.vat) ? `<div class="row between"><span>VAT</span><span>${fmt.money(o.vat)}</span></div>` : ''}${n2(o.service_charge) ? `<div class="row between"><span>Service</span><span>${fmt.money(o.service_charge)}</span></div>` : ''}${n2(o.delivery_charge) ? `<div class="row between"><span>Delivery</span><span>${fmt.money(o.delivery_charge)}</span></div>` : ''}
     <div class="row between big bold"><span>Total</span><span>${fmt.money(o.total)}</span></div>
     <div class="row mt"><a class="btn block" href="/m/${esc(d.restaurant.slug)}">← Back to menu</a></div><p class="center small muted">This page updates automatically.</p>`;

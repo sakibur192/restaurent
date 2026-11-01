@@ -29,6 +29,8 @@ const GET = (u, o) => api('GET', u, undefined, o), POST = (u, b, o) => api('POST
 
 // formatting
 const n2 = v => (Number(v) || 0);
+// pick the Bangla or English version of a sentence (for text built from several pieces)
+const L = (en, bn) => (window.I18N && I18N.lang === 'bn' ? bn : en);
 const fmt = {
   money: v => { const n = n2(v); return (n < 0 ? '-' : '') + CUR + Math.abs(n).toLocaleString('en-IN', { minimumFractionDigits: Number.isInteger(Math.round(n * 100) / 100) ? 0 : 2, maximumFractionDigits: 2 }); },
   num: (v, d = 2) => n2(v).toLocaleString('en-IN', { maximumFractionDigits: d }),

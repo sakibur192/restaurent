@@ -9,7 +9,11 @@ const r = express.Router();
 r.get('/public/site', wrap(async (req, res) => {
   const s = await c.getSettings();
   const ann = await db.all('SELECT title, body, level FROM announcements WHERE active ORDER BY id DESC LIMIT 3');
-  res.json({ brand: s.brand, plan: s.plan, landing: s.landing, signup_enabled: s.signup_enabled !== false, seo: s.seo, payment: { methods: s.payment.methods }, announcements: ann });
+  res.json({ brand: s.brand, plan: Object.assign({}, s.plan, { periods: s.plan.periods.filter(x => x.active !== false) }), landing: s.landing, default_lang: s.default_lang, signup_enabled: s.signup_enabled !== false, seo: s.seo, payment: { methods: s.payment.methods }, announcements: ann });
+}));
+
+r.get('/public/downloads', wrap(async (req, res) => {
+  res.json(await db.all('SELECT id, kind, lang, title_en, title_bn, desc_en, desc_bn, filename, size, hits FROM downloads WHERE active AND file_id IS NOT NULL ORDER BY sort, id'));
 }));
 
 r.get('/public/slug-check', wrap(async (req, res) => {
@@ -90,7 +94,7 @@ r.get('/public/menu/:slug', wrap(async (req, res) => {
     .map(p => ({ id: p.id, category_id: p.category_id, name: p.name, description: p.description, price: O.effectivePrice(p, branchId, now), regular_price: num(p.price), image_id: p.image_id, variants: p.variants, addons: p.addons, by_weight: p.by_weight }));
   const zones = await db.all('SELECT id, name, charge, min_order FROM zones WHERE tenant_id=$1 AND active ORDER BY id', [t.id]);
   res.json({
-    restaurant: { name: t.name, slug: t.slug, phone: s.phone || t.phone, address: s.address || t.address, logo_id: s.logo_id, color: s.color, banner: s.banner },
+    restaurant: { name: t.name, slug: t.slug, phone: s.phone || t.phone, address: s.address || t.address, logo_id: s.logo_id, color: s.color, banner: s.banner, theme: s.menu_theme || { preset: 'classic' }, lang: s.menu_lang || 'bn' },
     ordering: live && s.online_ordering !== false, table, branch_id: branchId, branches, categories: cats, products: prods, zones,
     settings: { currency: s.currency, vat_pct: s.vat_pct, vat_inclusive: s.vat_inclusive, service_pct: s.service_pct, service_dine_in_only: s.service_dine_in_only, min_order: s.min_order, round_total: s.round_total, online_payment_note: s.online_payment_note, payment_methods: (s.payment_methods || []).filter(m => m !== 'Due') }
   });
@@ -143,7 +147,7 @@ r.get('/public/track/:token', wrap(async (req, res) => {
   const tb = o.table_id ? await db.one('SELECT name FROM tables WHERE id=$1', [o.table_id]) : null;
   const rider = o.rider_id ? await db.one('SELECT name, phone FROM riders WHERE id=$1', [o.rider_id]) : null;
   res.json({
-    restaurant: { name: t.name, slug: t.slug, currency: (t.settings || {}).currency || '৳', phone: (t.settings || {}).phone },
+    restaurant: { name: t.name, slug: t.slug, currency: (t.settings || {}).currency || '৳', phone: (t.settings || {}).phone, lang: (t.settings || {}).menu_lang || 'bn', theme: (t.settings || {}).menu_theme || null },
     order: { order_no: ownNo, status: o.status, type: o.type, table: tb && tb.name, delivery_status: o.delivery_status, total: o.total, subtotal: o.subtotal, vat: o.vat, service_charge: o.service_charge, delivery_charge: o.delivery_charge, discount: o.discount, created_at: o.created_at, rider },
     items
   });

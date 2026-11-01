@@ -6,30 +6,47 @@ const M = { d: null, cart: JSON.parse(sessionStorage.getItem('cart_' + slug) || 
 const save = () => sessionStorage.setItem('cart_' + slug, JSON.stringify(M.cart));
 if (KIOSK) document.body.classList.add('kiosk');
 
+const PREVIEW = qs.get('preview') === '1';
+let THEME = null;
+function setTheme(t) { THEME = resolveTheme(t); applyTheme(THEME); }
+window.addEventListener('message', e => { if (e.origin !== location.origin || !e.data || e.data.type !== 'bx-theme') return; setTheme(e.data.theme); if (M.d) render(); });
 async function load() {
   try { M.d = await GET(`/api/public/menu/${slug}?${qs.get('t') ? 't=' + encodeURIComponent(qs.get('t')) : ''}${qs.get('branch') ? '&branch=' + qs.get('branch') : ''}`); }
   catch (e) { $('#app').innerHTML = `<div class="empty"><h2>Menu not found</h2><p>${esc(e.message)}</p></div>`; return; }
   const d = M.d, R = d.restaurant; CUR = d.settings.currency || '৳';
-  if (R.color) document.documentElement.style.setProperty('--brand', R.color);
+  if (!I18N._did) { I18N._did = 1; I18N.init(R.lang); }
+  let t = R.theme || {}; if (!t.primary && R.color && (!t.preset || t.preset === 'classic')) t = Object.assign({}, t, { primary: R.color });
+  if (PREVIEW && location.hash.length > 1) { try { t = JSON.parse(decodeURIComponent(location.hash.slice(1))); } catch (e) { } }
+  if (!THEME) setTheme(t);
   document.title = R.name + ' — Menu';
+  render();
+  if (PREVIEW) try { parent.postMessage({ type: 'bx-preview-ready' }, location.origin); } catch (e) { }
+}
+function render() {
+  const d = M.d, R = d.restaurant, T = THEME;
   const cats = d.categories.filter(c => d.products.some(p => p.category_id === c.id));
   const uncategorised = d.products.filter(p => !cats.some(c => c.id === p.category_id));
   if (uncategorised.length) cats.push({ id: 0, name: 'More' });
-  $('#app').innerHTML = `<div class="hd"><div class="row"><div class="lg">${R.logo_id ? `<img src="/f/${R.logo_id}">` : esc(initials(R.name))}</div><div><h1>${esc(R.name)}</h1><div class="s">${[R.address, R.phone].filter(Boolean).map(esc).join(' · ')}</div></div></div>
-      ${d.table ? `<div class="badge" style="margin-top:12px;background:#fff;color:var(--navy);font-size:13px">🍽 You are at table ${esc(d.table.name)}</div>` : ''}${KIOSK ? '<div class="badge" style="margin-top:12px;background:#fff;color:var(--navy);font-size:14px">Touch to order · Pay at the counter</div>' : ''}
-      ${!d.table && !KIOSK && d.branches.length > 1 ? `<select id="brs" style="margin-top:12px;max-width:280px">${d.branches.map(b => `<option value="${b.id}" ${b.id === d.branch_id ? 'selected' : ''}>${esc(b.name)}</option>`).join('')}</select>` : ''}</div>
-    ${R.banner ? `<div class="ban">🎉 ${esc(R.banner)}</div>` : ''}${!d.ordering ? '<div class="ban" style="background:#fee2e2;color:#7f1d1d">Online ordering is closed right now — you can still browse the menu.</div>' : ''}
-    <div class="cbar">${cats.map(c => `<button class="chip" data-c="${c.id}">${esc(c.name)}</button>`).join('')}</div>
+  const cover = T.cover_id ? `style="background-image:url('/f/${T.cover_id}')"` : '';
+  const lang = window.I18N ? I18N.lang : 'en';
+  $('#app').innerHTML = `<div class="hd ${T.cover_id ? 'cover' : ''}" ${cover}>${window.I18N ? `<div class="lsw" data-notr><button data-lg="bn" class="${lang === 'bn' ? 'on' : ''}">বাংলা</button><button data-lg="en" class="${lang === 'en' ? 'on' : ''}">EN</button></div>` : ''}
+      <div class="row" style="padding-right:90px"><div class="lg">${R.logo_id ? `<img src="/f/${R.logo_id}" alt="">` : esc(initials(R.name))}</div><div style="min-width:0"><h1 data-notr>${esc(R.name)}</h1><div class="s" data-notr>${[R.address, R.phone].filter(Boolean).map(esc).join(' · ')}</div></div></div>
+      ${d.table ? `<div class="pill">🍽 You are at table <span data-notr>${esc(d.table.name)}</span></div>` : ''}${KIOSK ? '<div class="pill">Touch to order · Pay at the counter</div>' : ''}
+      ${!d.table && !KIOSK && d.branches.length > 1 ? `<select id="brs" style="margin-top:12px;max-width:280px" data-notr>${d.branches.map(b => `<option value="${b.id}" ${b.id === d.branch_id ? 'selected' : ''}>${esc(b.name)}</option>`).join('')}</select>` : ''}</div>
+    ${R.banner ? `<div class="ban" data-notr>🎉 ${esc(R.banner)}</div>` : ''}${!d.ordering ? '<div class="ban" style="background:#fee2e2;color:#7f1d1d">Online ordering is closed right now — you can still browse the menu.</div>' : ''}
+    <div class="cbar">${cats.map((c, i) => `<button class="chip ${i === 0 ? 'on' : ''}" data-c="${c.id}" ${c.id ? 'data-notr' : ''}>${esc(c.name)}</button>`).join('')}</div>
     ${cats.map(c => { const items = c.id === 0 ? uncategorised : d.products.filter(p => p.category_id === c.id);
-      return `<div class="sec" id="cat-${c.id}"><h2>${esc(c.name)}</h2>${items.map(p => `<div class="item" data-p="${p.id}"><div class="im">${p.image_id ? `<img src="/f/${p.image_id}" loading="lazy">` : esc(initials(p.name))}</div>
-        <div style="flex:1;min-width:0;display:flex;flex-direction:column"><div class="nm">${esc(p.name)}</div><div class="ds">${esc(p.description || '')}</div>
-        <div class="row" style="margin-top:auto"><span class="pr">${p.variants && p.variants.length ? 'from ' + fmt.money(Math.min(...p.variants.map(v => n2(v.price)))) : fmt.money(p.price)}${p.by_weight ? '/kg' : ''}${n2(p.regular_price) > n2(p.price) && !(p.variants || []).length ? `<span class="strike">${fmt.money(p.regular_price)}</span>` : ''}</span>${d.ordering ? '<button class="btn sm primary add">+ Add</button>' : ''}</div></div></div>`).join('')}</div>`; }).join('')}
-    <div class="center mt"><button class="btn ghost" id="fbk">💬 Send feedback</button>${!KIOSK ? ' <button class="btn ghost" id="myo">🧾 My orders</button>' : ''}</div>
-    <div class="center small muted mt mb">Powered by Baybex</div>
+      return `<div class="sec" id="cat-${c.id}"><h2 ${c.id ? 'data-notr' : ''}>${esc(c.name)}</h2><div class="items">${items.map(p => { const sale = n2(p.regular_price) > n2(p.price) && !(p.variants || []).length;
+        return `<div class="item" data-p="${p.id}">${sale && T.show_images && T.layout !== 'compact' && T.layout !== 'list' ? `<span class="tag">−${Math.round((1 - n2(p.price) / n2(p.regular_price)) * 100)}%</span>` : ''}<div class="im">${p.image_id ? `<img src="/f/${p.image_id}" loading="lazy" alt="">` : esc(initials(p.name))}</div>
+        <div class="bd"><div class="nm" data-notr>${esc(p.name)}</div>${p.description ? `<div class="ds" data-notr>${esc(p.description)}</div>` : ''}
+        <div class="ft"><span class="pr">${p.variants && p.variants.length ? 'from ' + fmt.money(Math.min(...p.variants.map(v => n2(v.price)))) : fmt.money(p.price)}${p.by_weight ? '/kg' : ''}${sale ? `<span class="strike">${fmt.money(p.regular_price)}</span>` : ''}</span>${d.ordering ? '<button class="btn sm add">+ Add</button>' : ''}</div></div></div>`; }).join('')}</div></div>`; }).join('')}
+    <div class="center mt foot"><button class="btn ghost" id="fbk">💬 Send feedback</button>${!KIOSK ? ' <button class="btn ghost" id="myo">🧾 My orders</button>' : ''}</div>
+    <div class="center small mt mb foot">Powered by <span data-notr>Baybex</span></div>
     <button class="fab" id="fab" style="display:none"></button>`;
-  $$('.cbar .chip').forEach(b => b.onclick = () => { $$('.cbar .chip').forEach(x => x.classList.toggle('on', x === b)); const s = $('#cat-' + b.dataset.c); window.scrollTo({ top: s.offsetTop - 56, behavior: 'smooth' }); });
+  $$('.cbar .chip').forEach(b => b.onclick = () => { $$('.cbar .chip').forEach(x => x.classList.toggle('on', x === b)); b.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); const s = $('#cat-' + b.dataset.c); window.scrollTo({ top: s.getBoundingClientRect().top + scrollY - 58, behavior: 'smooth' }); });
   if (d.ordering) $$('.item').forEach(x => x.onclick = () => addModal(d.products.find(p => p.id === +x.dataset.p)));
   if ($('#brs')) $('#brs').onchange = e => { location.search = '?branch=' + e.target.value; };
+  $$('[data-lg]').forEach(b => b.onclick = () => { I18N.set(b.dataset.lg); render(); });
   $('#fab').onclick = cartSheet; $('#fbk').onclick = feedback; if ($('#myo')) $('#myo').onclick = myOrders;
   drawFab();
 }

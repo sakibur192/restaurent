@@ -74,6 +74,12 @@ by staff without permission ask for a **manager PIN** on the spot.
 - **Reports** — 27 reports incl. daily/monthly/hourly/weekday sales, item & category profit, menu engineering, waiter/cashier/staff, kitchen prep time, table utilisation, cancellations, refunds, discounts, wastage, stock movement, customer retention, 7-day forecast. CSV export & print.
 - **Multi-branch** — branch switcher, branch-locked staff, branch comparison, stock transfers, consolidated reports.
 - **Security** — bcrypt passwords & PINs, httpOnly cookies, audit log, login history, active sessions (remote log-out), failed-login lockout, tenant isolation on every query.
+- **Bangla & English** — the whole app, super admin, guest menu, landing page, login and signup switch between বাংলা and English (button in the top bar). Defaults: *Super admin → Landing page* (website), *Settings → Restaurant* (staff app and guest menu). The Bangla wording lives in `public/js/bn.js` — edit any line there to change a word.
+- **Guest menu design** — 8 ready styles (Classic, Midnight dark, Fresh green, Warm bistro, Minimal, Street food, Royal gold, Café pastel), 4 layouts (list, grid, compact, magazine), colours, font, corner roundness, cover photo, show/hide photos and descriptions, with live phone/tablet/desktop preview (*Settings → Menu design*).
+- **QR code download** — exact square size in mm / cm / inch, PNG (150–1200 DPI, DPI stored in the file), print-ready PDF or vector SVG, colours, border and damage protection; one table, all tables as a ZIP, the online-menu QR and the kiosk QR.
+- **Billing periods** — monthly, 3 months, 6 months, 1 year (add or remove periods, labels and badges in both languages, prices and days) in *Super admin → Package & pricing*. Restaurants pick a period when they pay.
+- **Website downloads** — upload PDFs (user manual, brochure, price list…) in *Super admin → Downloads*; they appear on the landing page with download and view buttons and a download counter.
+- **Landing page** — every text in English and Bangla is editable in *Super admin → Landing page* (hero, numbers, problems → solutions, feature modules, screenshots, steps, audience, pricing, downloads, FAQ, contact, SEO).
 - **Backups** — automatic daily JSON backup in `data/backups` (7 kept), per-restaurant export, full platform export. Images are stored inside PostgreSQL, so a database backup includes them.
 
 ---
@@ -91,6 +97,11 @@ src/routes-public.js   signup, login, QR/online menu & ordering, tracking
 src/routes-app.js      restaurant API (POS, orders, shifts, kitchen, tables, staff, settings, billing)
 src/routes-app2.js     restaurant API (inventory, recipes, purchases, accounting, reports, dashboard)
 src/routes-resources.js  generic CRUD for simple records (forms are generated from this schema)
+src/qr.js              exact-size QR codes: PNG with DPI, SVG, PDF, ZIP
+src/landing-default.js default website text (English + Bangla)
+defaults/docs/         PDFs added to the website downloads on first start
+public/js/i18n.js      Bangla/English switch;  public/js/bn.js  Bangla wording
+public/js/themes.js    guest menu styles
 public/                all HTML/CSS/JS (no build step)
 Dockerfile             production image for Coolify
 ```

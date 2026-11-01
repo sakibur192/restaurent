@@ -1,17 +1,17 @@
 // Super admin SPA
 let S = null; // platform settings
 const SA = {};
-const NAV = [['dash', '📊', 'Dashboard'], ['tenants', '🏪', 'Restaurants'], ['payments', '💳', 'Payments'], ['plan', '📦', 'Package & pricing'], ['landing', '🌐', 'Landing page'],
+const NAV = [['dash', '📊', 'Dashboard'], ['tenants', '🏪', 'Restaurants'], ['payments', '💳', 'Payments'], ['plan', '📦', 'Package & pricing'], ['landing', '🌐', 'Landing page'], ['downloads', '📄', 'Downloads'],
   ['brand', '🎨', 'Brand & contact'], ['announce', '📢', 'Announcements'], ['admins', '🛡️', 'Super admins'], ['logins', '🔐', 'Login activity'], ['backup', '💾', 'Backup']];
 
 async function boot() {
   try { SA.me = await GET('/api/super/me', { noRedirect: true }); }
   catch (e) { return loginView(); }
   S = await GET('/api/super/settings'); CUR = S.brand.currency || '৳';
-  $('#root').innerHTML = `<div class="shell"><aside class="side" id="side"><div class="brand"><div class="logo">${S.brand.logo_id ? `<img src="/f/${S.brand.logo_id}">` : 'B'}</div><div><div>${esc(S.brand.name)}</div><div class="tn">Super admin</div></div></div>
+  $('#root').innerHTML = `<div class="shell"><aside class="side" id="side"><div class="brand"><div class="logo">${S.brand.logo_id ? `<img src="/f/${S.brand.logo_id}">` : 'B'}</div><div><div data-notr>${esc(S.brand.name)}</div><div class="tn">Super admin</div></div></div>
     <nav class="nav">${NAV.map(([k, i, l]) => `<a href="#/${k}" data-k="${k}"><span class="ic">${i}</span>${l}<span class="cnt" id="cnt-${k}" style="display:none"></span></a>`).join('')}
     <div class="grp">Account</div><a href="/" target="_blank"><span class="ic">↗</span>View website</a><a href="#" id="logout"><span class="ic">⎋</span>Log out</a></nav></aside>
-    <div class="main"><div class="top"><button class="btn ghost icon burger" id="burger">☰</button><div class="title" id="ttl"></div><span class="muted small">${esc(SA.me.email)}</span></div><div class="page" id="page"></div></div></div>`;
+    <div class="main"><div class="top"><button class="btn ghost icon burger" id="burger">☰</button><div class="title" id="ttl"></div>${I18N.toggleHTML()}<span class="muted small hide-sm" data-notr>${esc(SA.me.email)}</span></div><div class="page" id="page"></div></div></div>`;
   $('#burger').onclick = () => $('#side').classList.toggle('open');
   $('#logout').onclick = async e => { e.preventDefault(); await POST('/api/super/logout'); location.reload(); };
   window.addEventListener('hashchange', route); route();
@@ -33,7 +33,7 @@ function route() {
   const item = NAV.find(n => n[0] === k.split('/')[0]); $('#ttl').textContent = item ? item[2] : '';
   const fn = PAGES[k.split('/')[0]] || PAGES.dash;
   $('#page').innerHTML = '<div class="loading"><span class="spin"></span></div>';
-  Promise.resolve(fn($('#page'), params, k.split('/')[1])).catch(errToast);
+  return Promise.resolve(fn($('#page'), params, k.split('/')[1])).catch(errToast);
 }
 async function saveSettings(patch) { S = await PUT('/api/super/settings', patch); toast('Saved', 'ok'); }
 
@@ -96,52 +96,126 @@ const PAGES = {
     $('#manual').onclick = async () => {
       const ts = await GET('/api/super/tenants');
       modal({ title: 'Record manual payment', body: `<form id="mf"><label class="f"><span>Restaurant</span><select name="tenant_id">${ts.map(t => `<option value="${t.id}">${esc(t.name)} (${esc(t.slug)})</option>`).join('')}</select></label>
+        <label class="f"><span>Period</span><select id="mper">${(S.plan.periods || []).filter(p => p.active !== false).map((p, i) => `<option value="${i}">${esc(p.label_en)} — ${fmt.money(p.price)}</option>`).join('')}</select></label>
         <div class="fgrid"><label class="f"><span>Amount</span><input name="amount" type="number" value="${S.plan.price}"></label><label class="f"><span>Days</span><input name="days" type="number" value="${S.plan.duration_days}"></label>
         <label class="f"><span>Method</span><input name="method" value="Cash"></label><label class="f"><span>Reference</span><input name="trx_id"></label></div><label class="f"><span>Note</span><input name="note"></label></form>`,
         actions: [{ label: 'Cancel' }, { label: 'Save & extend', cls: 'primary', onClick: async () => { await POST('/api/super/payments', Object.fromEntries(new FormData($('#mf')))); toast('Recorded', 'ok'); route(); } }] });
+      const act = (S.plan.periods || []).filter(p => p.active !== false);
+      $('#mper').onchange = e => { const p = act[+e.target.value]; $('#mf [name=amount]').value = p.price; $('#mf [name=days]').value = p.days; };
     };
   },
   async plan(el) {
-    const P = S.plan, PM = S.payment;
-    el.innerHTML = `<div class="grid g2"><div class="card"><h3>Package (one plan, all features)</h3><form id="pf">
-      <label class="f"><span>Package name</span><input name="name" value="${esc(P.name)}"></label>
-      <div class="fgrid"><label class="f"><span>Price (${esc(CUR)})</span><input name="price" type="number" value="${P.price}"></label><label class="f"><span>Billing period (days)</span><input name="duration_days" type="number" value="${P.duration_days}"></label>
-      <label class="f"><span>Yearly price (0 = off)</span><input name="yearly_price" type="number" value="${P.yearly_price || 0}"></label><label class="f"><span>Free trial days</span><input name="trial_days" type="number" value="${P.trial_days}"></label></div>
-      <label class="f"><span>Short note</span><input name="note" value="${esc(P.note || '')}"></label>
-      <label class="f"><span>Feature list (one per line)</span><textarea name="features" rows="10">${esc((P.features || []).join('\n'))}</textarea></label>
+    const P = JSON.parse(JSON.stringify(S.plan)), PM = S.payment;
+    P.periods = P.periods || [];
+    el.innerHTML = `<div class="card"><h3>Billing periods</h3><p class="muted mt0">Restaurants choose one of the active periods when they pay. Price is the total for the whole period.</p>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Label (English)</th><th>Label (বাংলা)</th><th>Months</th><th>Days added</th><th>Price (${esc(CUR)})</th><th>Badge (English)</th><th>Badge (বাংলা)</th><th>Active</th><th></th></tr></thead><tbody id="per"></tbody></table></div>
+      <div class="row mt"><button class="btn sm" id="addp">+ Add period</button><span class="muted small" id="permo"></span></div></div>
+    <div class="grid g2 mt"><div class="card"><h3>Package</h3><form id="pf">
+      <div class="fgrid"><label class="f"><span>Package name (English)</span><input name="name" value="${esc(P.name)}"></label><label class="f"><span>Package name (বাংলা)</span><input name="name_bn" value="${esc(P.name_bn || '')}"></label>
+      <label class="f"><span>Free trial days</span><input name="trial_days" type="number" value="${P.trial_days}"></label><div></div>
+      <label class="f full"><span>Short note (English)</span><input name="note" value="${esc(P.note || '')}"></label><label class="f full"><span>Short note (বাংলা)</span><input name="note_bn" value="${esc(P.note_bn || '')}"></label>
+      <label class="f"><span>Features (English, one per line)</span><textarea name="features" rows="9">${esc((P.features || []).join('\n'))}</textarea></label>
+      <label class="f"><span>Features (বাংলা, one per line)</span><textarea name="features_bn" rows="9">${esc((P.features_bn || []).join('\n'))}</textarea></label></div>
       <label class="check"><input type="checkbox" name="signup" ${S.signup_enabled !== false ? 'checked' : ''}> Allow new restaurants to sign up</label>
-      <button class="btn primary">Save package</button></form></div>
-      <div class="card"><h3>How restaurants pay you</h3><form id="mf"><label class="f"><span>Instructions</span><textarea name="instructions">${esc(PM.instructions || '')}</textarea></label>
+      <button class="btn primary">Save package & periods</button></form></div>
+      <div class="card"><h3>How restaurants pay you</h3><form id="mf"><label class="f"><span>Instructions (English)</span><textarea name="instructions">${esc(PM.instructions || '')}</textarea></label>
+      <label class="f"><span>Instructions (বাংলা)</span><textarea name="instructions_bn">${esc(PM.instructions_bn || '')}</textarea></label>
       <div id="methods"></div><button type="button" class="btn sm" id="addm">+ Add method</button><hr><button class="btn primary">Save payment methods</button></form></div></div>`;
+    const drawP = () => {
+      $('#per').innerHTML = P.periods.map((p, i) => `<tr>${['label_en', 'label_bn'].map(k => `<td><input data-i="${i}" data-k="${k}" value="${esc(p[k] || '')}" style="min-width:110px"></td>`).join('')}
+        <td><input type="number" data-i="${i}" data-k="months" value="${p.months}" style="width:80px"></td><td><input type="number" data-i="${i}" data-k="days" value="${p.days}" style="width:90px"></td>
+        <td><input type="number" data-i="${i}" data-k="price" value="${p.price}" style="width:110px"></td>${['badge_en', 'badge_bn'].map(k => `<td><input data-i="${i}" data-k="${k}" value="${esc(p[k] || '')}" placeholder="optional" style="min-width:100px"></td>`).join('')}
+        <td><input type="checkbox" data-i="${i}" data-k="active" ${p.active !== false ? 'checked' : ''}></td><td><button type="button" class="btn icon danger" data-del="${i}">✕</button></td></tr>`).join('');
+      $$('#per input').forEach(x => x.oninput = x.onchange = () => { const p = P.periods[x.dataset.i]; const k = x.dataset.k; p[k] = x.type === 'checkbox' ? x.checked : x.type === 'number' ? Number(x.value) : x.value; if (k === 'months' && !x.dataset.touched) { p.days = Math.round(Number(x.value) === 12 ? 365 : Number(x.value) * 30); } monthly(); });
+      $$('#per [data-k=days]').forEach(x => x.addEventListener('input', () => { x.dataset.touched = 1; }));
+      $$('#per [data-del]').forEach(b => b.onclick = () => { P.periods.splice(+b.dataset.del, 1); drawP(); });
+      monthly();
+    };
+    const monthly = () => { $('#permo').textContent = P.periods.filter(p => p.active !== false && p.months).map(p => `${p.label_en}: ${fmt.money(p.price / p.months)}/month`).join(' · '); };
+    drawP();
+    $('#addp').onclick = () => { P.periods.push({ months: 1, days: 30, price: 0, label_en: '', label_bn: '', badge_en: '', badge_bn: '', active: true }); drawP(); };
     $('#pf').onsubmit = async e => { e.preventDefault(); const f = e.target;
-      await saveSettings({ plan: { name: f.name.value, price: +f.price.value, duration_days: +f.duration_days.value || 30, yearly_price: +f.yearly_price.value, trial_days: +f.trial_days.value, note: f.note.value, features: f.features.value.split('\n').map(s => s.trim()).filter(Boolean) }, signup_enabled: f.signup.checked }); };
+      const per = P.periods.filter(p => p.label_en || p.price).map(p => Object.assign(p, { months: Number(p.months) || 1, days: Number(p.days) || 30, price: Number(p.price) || 0 }));
+      if (!per.some(p => p.active !== false)) return toast('Keep at least one active period', 'err');
+      await saveSettings({ plan: Object.assign({}, P, { name: f.name.value, name_bn: f.name_bn.value, trial_days: +f.trial_days.value, note: f.note.value, note_bn: f.note_bn.value,
+        features: f.features.value.split('\n').map(s => s.trim()).filter(Boolean), features_bn: f.features_bn.value.split('\n').map(s => s.trim()).filter(Boolean), periods: per }), signup_enabled: f.signup.checked }); };
     const ms = (PM.methods || []).slice();
     const draw = () => { $('#methods').innerHTML = ms.map((m, i) => `<div class="row mb"><input placeholder="bKash" value="${esc(m.name)}" data-i="${i}" data-k="name" style="flex:1"><input placeholder="01XXXXXXXXX" value="${esc(m.number)}" data-i="${i}" data-k="number" style="flex:1.3"><input placeholder="Personal / Merchant" value="${esc(m.type || '')}" data-i="${i}" data-k="type" style="flex:1"><button type="button" class="btn icon danger" data-del="${i}">✕</button></div>`).join('');
       $$('#methods input').forEach(x => x.oninput = () => { ms[x.dataset.i][x.dataset.k] = x.value; }); $$('#methods [data-del]').forEach(b => b.onclick = () => { ms.splice(+b.dataset.del, 1); draw(); }); };
     draw(); $('#addm').onclick = () => { ms.push({ name: '', number: '', type: '' }); draw(); };
-    $('#mf').onsubmit = async e => { e.preventDefault(); await saveSettings({ payment: { instructions: e.target.instructions.value, methods: ms.filter(m => m.name) } }); };
+    $('#mf').onsubmit = async e => { e.preventDefault(); await saveSettings({ payment: { instructions: e.target.instructions.value, instructions_bn: e.target.instructions_bn.value, methods: ms.filter(m => m.name) } }); };
   },
-  async landing(el) {
-    const L = JSON.parse(JSON.stringify(S.landing)); L.features = L.features || []; L.faq = L.faq || [];
-    el.innerHTML = `<div class="card"><form id="lf"><div class="fgrid"><label class="f full"><span>Hero title</span><input name="hero_title" value="${esc(L.hero_title)}"></label>
-      <label class="f full"><span>Hero sub-text</span><textarea name="hero_sub">${esc(L.hero_sub)}</textarea></label><label class="f"><span>Button text</span><input name="cta" value="${esc(L.cta || '')}"></label>
-      <label class="f"><span>SEO title</span><input name="seo_title" value="${esc((S.seo || {}).title || '')}"></label><label class="f full"><span>SEO description</span><input name="seo_desc" value="${esc((S.seo || {}).description || '')}"></label></div>
-      <h3 class="mt">Feature boxes</h3><div id="fl"></div><button type="button" class="btn sm" id="addf">+ Add feature</button>
-      <h3 class="mt">FAQ</h3><div id="ql"></div><button type="button" class="btn sm" id="addq">+ Add question</button><hr>
-      <div class="row"><button class="btn primary">Save landing page</button><a class="btn" href="/" target="_blank">Preview ↗</a></div></form></div>`;
-    const drawF = () => { $('#fl').innerHTML = L.features.map((f, i) => `<div class="row mb"><input value="${esc(f.icon)}" data-i="${i}" data-k="icon" style="width:60px"><input value="${esc(f.title)}" placeholder="Title" data-i="${i}" data-k="title" style="flex:1"><input value="${esc(f.text)}" placeholder="Text" data-i="${i}" data-k="text" style="flex:2.5"><button type="button" class="btn icon danger" data-del="${i}">✕</button></div>`).join('');
-      $$('#fl input').forEach(x => x.oninput = () => { L.features[x.dataset.i][x.dataset.k] = x.value; }); $$('#fl [data-del]').forEach(b => b.onclick = () => { L.features.splice(+b.dataset.del, 1); drawF(); }); };
-    const drawQ = () => { $('#ql').innerHTML = L.faq.map((f, i) => `<div class="row mb"><input value="${esc(f.q)}" placeholder="Question" data-i="${i}" data-k="q" style="flex:1"><input value="${esc(f.a)}" placeholder="Answer" data-i="${i}" data-k="a" style="flex:2"><button type="button" class="btn icon danger" data-del="${i}">✕</button></div>`).join('');
-      $$('#ql input').forEach(x => x.oninput = () => { L.faq[x.dataset.i][x.dataset.k] = x.value; }); $$('#ql [data-del]').forEach(b => b.onclick = () => { L.faq.splice(+b.dataset.del, 1); drawQ(); }); };
-    drawF(); drawQ();
-    $('#addf').onclick = () => { L.features.push({ icon: '✨', title: '', text: '' }); drawF(); }; $('#addq').onclick = () => { L.faq.push({ q: '', a: '' }); drawQ(); };
-    $('#lf').onsubmit = async e => { e.preventDefault(); const f = e.target; Object.assign(L, { hero_title: f.hero_title.value, hero_sub: f.hero_sub.value, cta: f.cta.value });
-      await saveSettings({ landing: L, seo: { title: f.seo_title.value, description: f.seo_desc.value } }); };
+  async landing(el, params) {
+    const lang = params.lang === 'en' ? 'en' : 'bn';
+    const L = JSON.parse(JSON.stringify(S.landing)); const C = L[lang];
+    const seo = Object.assign({}, S.seo);
+    const txt = (k, label, area) => `<label class="f ${area ? 'full' : ''}"><span>${label}</span>${area ? `<textarea data-f="${k}">${esc(C[k] || '')}</textarea>` : `<input data-f="${k}" value="${esc(C[k] || '')}">`}</label>`;
+    const LISTS = {
+      stats: { title: 'Number strip', fields: [['value', 'Number', 1], ['label', 'Text', 3]] },
+      problems: { title: 'Problems → solutions', fields: [['problem', 'Problem', 2], ['solution', 'Solution', 3]] },
+      modules: { title: 'Feature modules', fields: [['icon', 'Icon', .5], ['title', 'Title', 1.5], ['text', 'Text', 2.5], ['bullets', 'Points (one per line)', 3, 'lines']] },
+      shots: { title: 'Screenshot gallery', fields: [['img', 'Image (pos, kitchen, tables, recipe, pnl, delivery, menu, dashboard)', 1.4], ['caption', 'Caption', 2.5]] },
+      steps: { title: 'How to start (steps)', fields: [['title', 'Title', 1.5], ['text', 'Text', 3]] },
+      faq: { title: 'Questions & answers', fields: [['q', 'Question', 2], ['a', 'Answer', 3]] }
+    };
+    el.innerHTML = `<div class="page-h"><div class="tabs" style="margin:0;border:none"><a href="#/landing?lang=bn" class="${lang === 'bn' ? 'on' : ''}">বাংলা</a><a href="#/landing?lang=en" class="${lang === 'en' ? 'on' : ''}">English</a></div>
+      <div class="row"><label class="row small" style="gap:6px">Default language for visitors <select id="dl" style="width:auto"><option value="bn" ${S.default_lang !== 'en' ? 'selected' : ''}>বাংলা</option><option value="en" ${S.default_lang === 'en' ? 'selected' : ''}>English</option></select></label><a class="btn" href="/?lang=${lang}" target="_blank">Preview ↗</a><button class="btn primary" id="lsave">Save ${lang === 'bn' ? 'বাংলা' : 'English'} page</button></div></div>
+      <div class="card"><h3>Top section (hero)</h3><div class="fgrid">${txt('hero_badge', 'Small label')}${txt('hero_note', 'Note under buttons')}${txt('hero_title', 'Title')}${txt('hero_highlight', 'Title (coloured part)')}${txt('hero_sub', 'Sub-text', 1)}${txt('cta_primary', 'Main button')}${txt('cta_secondary', 'Second button')}</div></div>
+      <div class="card mt"><h3>Section headings</h3><div class="fgrid">${[['problems_title', 'Problems title'], ['problems_sub', 'Problems sub-text'], ['modules_title', 'Features title'], ['modules_sub', 'Features sub-text'], ['shots_title', 'Screenshots title'], ['steps_title', 'Steps title'], ['audience_title', 'Audience title'], ['pricing_title', 'Pricing title'], ['pricing_sub', 'Pricing sub-text'], ['downloads_title', 'Downloads title'], ['downloads_sub', 'Downloads sub-text'], ['faq_title', 'FAQ title'], ['contact_title', 'Contact title'], ['contact_text', 'Contact text'], ['footer_text', 'Footer text']].map(([k, l]) => txt(k, l)).join('')}</div>
+        <label class="f"><span>Audience (comma separated)</span><input id="aud" value="${esc((C.audience || []).join(', '))}"></label></div>
+      ${Object.entries(LISTS).map(([k, d]) => `<div class="card mt"><div class="row between"><h3 class="mt0">${d.title}</h3><button type="button" class="btn sm" data-add="${k}">+ Add</button></div><div id="list-${k}"></div></div>`).join('')}
+      <div class="card mt"><h3>SEO (search engines)</h3><div class="fgrid"><label class="f"><span>Page title</span><input id="seot" value="${esc(lang === 'bn' ? seo.title_bn || '' : seo.title || '')}"></label><label class="f"><span>Description</span><input id="seod" value="${esc(lang === 'bn' ? seo.description_bn || '' : seo.description || '')}"></label></div></div>`;
+    const drawList = k => {
+      const d = LISTS[k]; const arr = C[k] = C[k] || [];
+      $('#list-' + k).innerHTML = arr.map((it, i) => `<div class="row mb" style="align-items:flex-start">${d.fields.map(([f, lab, fl, kind]) => kind === 'lines' ? `<textarea data-l="${k}" data-i="${i}" data-k="${f}" placeholder="${esc(lab)}" style="flex:${fl};min-height:70px">${esc((it[f] || []).join('\n'))}</textarea>` : `<input data-l="${k}" data-i="${i}" data-k="${f}" placeholder="${esc(lab)}" value="${esc(it[f] || '')}" style="flex:${fl}">`).join('')}
+        <button type="button" class="btn icon" data-up="${k}:${i}" title="Move up">↑</button><button type="button" class="btn icon danger" data-rm="${k}:${i}">✕</button></div>`).join('') || '<div class="muted small">Empty</div>';
+      $$(`[data-l="${k}"]`).forEach(x => x.oninput = () => { const f = d.fields.find(z => z[0] === x.dataset.k); arr[x.dataset.i][x.dataset.k] = f[3] === 'lines' ? x.value.split('\n').map(s => s.trim()).filter(Boolean) : x.value; });
+      $$(`[data-rm^="${k}:"]`).forEach(b => b.onclick = () => { arr.splice(+b.dataset.rm.split(':')[1], 1); drawList(k); });
+      $$(`[data-up^="${k}:"]`).forEach(b => b.onclick = () => { const i = +b.dataset.up.split(':')[1]; if (i > 0) { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; drawList(k); } });
+    };
+    Object.keys(LISTS).forEach(drawList);
+    $$('[data-add]').forEach(b => b.onclick = () => { const k = b.dataset.add; C[k] = C[k] || []; C[k].push(Object.fromEntries(LISTS[k].fields.map(([f, , , kind]) => [f, kind === 'lines' ? [] : '']))); drawList(k); });
+    $$('[data-f]').forEach(x => x.oninput = () => { C[x.dataset.f] = x.value; });
+    $('#lsave').onclick = async () => {
+      C.audience = $('#aud').value.split(',').map(s => s.trim()).filter(Boolean);
+      if (lang === 'bn') { seo.title_bn = $('#seot').value; seo.description_bn = $('#seod').value; } else { seo.title = $('#seot').value; seo.description = $('#seod').value; }
+      await saveSettings({ landing: L, seo, default_lang: $('#dl').value });
+    };
+  },
+  async downloads(el) {
+    const rows = await GET('/api/super/downloads');
+    el.innerHTML = `<div class="page-h"><p class="muted mt0">PDFs shown in the <b>Downloads</b> section of your website (user manual, brochure, price list…). Visitors can download them without logging in.</p>
+      <label class="btn primary">⬆ Upload PDF<input type="file" accept="application/pdf,.pdf" id="up" hidden></label></div>
+      <div class="card p0" id="dl"></div>`;
+    const kinds = { manual: 'User manual', brochure: 'Brochure / marketing', other: 'Other' };
+    $('#dl').innerHTML = table([{ key: 'title_en', label: 'Title', html: r => `<b>${esc(r.title_en || '')}</b><div class="small muted">${esc(r.title_bn || '')}</div>` }, { key: 'kind', label: 'Type', html: r => badge(kinds[r.kind] || r.kind) },
+      { key: 'lang', label: 'Language', fmt: v => ({ en: 'English', bn: 'বাংলা', both: 'Both' }[v] || v) }, { key: 'size', label: 'Size', num: 1, fmt: v => (v / 1048576).toFixed(1) + ' MB' }, { key: 'hits', label: 'Downloads', num: 1 },
+      { key: 'active', label: 'Shown', html: r => r.active ? badge('active') : '<span class="badge">hidden</span>' }, { key: 'x', label: '', html: r => `<a class="btn sm" href="/d/${r.id}/${encodeURIComponent(r.filename || 'file.pdf')}?view=1" target="_blank">Open</a>` }], rows, { onRow: 1, empty: 'No files yet. Upload your user manual and brochure.' });
+    const upload = async (file, query) => {
+      if (!file) return; if (file.size > 60 * 1048576) return toast('File must be under 60 MB', 'err');
+      toast('Uploading…');
+      const r = await fetch('/api/super/downloads/upload?' + new URLSearchParams(Object.assign({ filename: file.name }, query)), { method: 'POST', headers: { 'Content-Type': 'application/pdf' }, body: file, credentials: 'same-origin' });
+      const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Upload failed'); return j;
+    };
+    const edit = d => {
+      const m = modal({ title: d.id ? 'Edit download' : 'New download', size: 'wide', body: `<form id="df" class="fgrid">
+        <label class="f"><span>Title (English)</span><input name="title_en" value="${esc(d.title_en || '')}"></label><label class="f"><span>Title (বাংলা)</span><input name="title_bn" value="${esc(d.title_bn || '')}"></label>
+        <label class="f"><span>Short description (English)</span><input name="desc_en" value="${esc(d.desc_en || '')}"></label><label class="f"><span>Short description (বাংলা)</span><input name="desc_bn" value="${esc(d.desc_bn || '')}"></label>
+        <label class="f"><span>Type</span><select name="kind">${Object.entries(kinds).map(([k, v]) => `<option value="${k}" ${d.kind === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+        <label class="f"><span>Language of the document</span><select name="lang"><option value="en" ${d.lang === 'en' ? 'selected' : ''}>English</option><option value="bn" ${d.lang === 'bn' ? 'selected' : ''}>বাংলা</option><option value="both" ${d.lang === 'both' ? 'selected' : ''}>Both</option></select></label>
+        <label class="f"><span>Order</span><input name="sort" type="number" value="${d.sort || 0}"></label><label class="check" style="margin-top:28px"><input type="checkbox" name="active" ${d.active !== false ? 'checked' : ''}> Show on website</label>
+        <div class="full small muted">File: <b>${esc(d.filename || '')}</b> ${d.size ? '(' + (d.size / 1048576).toFixed(1) + ' MB)' : ''} — <label style="color:var(--brand);cursor:pointer;font-weight:600">replace PDF<input type="file" accept="application/pdf,.pdf" id="rep" hidden></label></div></form>`,
+        actions: [{ label: 'Delete', cls: 'danger', onClick: async () => { if (await confirmBox('Delete this file from the website?', { danger: true })) { await DEL('/api/super/downloads/' + d.id); route(); } else return false; } }, { label: 'Cancel' },
+          { label: 'Save', cls: 'primary', onClick: async () => { const f = Object.fromEntries(new FormData($('#df'))); f.active = !!f.active; await PUT('/api/super/downloads/' + d.id, f); toast('Saved', 'ok'); route(); } }] });
+      $('#rep', m.el).onchange = async e => { try { await upload(e.target.files[0], { id: d.id }); toast('PDF replaced', 'ok'); m.close(); route(); } catch (err) { errToast(err); } };
+    };
+    $('#up').onchange = async e => { try { const r = await upload(e.target.files[0], { kind: 'manual', lang: 'en' }); toast('Uploaded — now set the title and type', 'ok'); await route(); edit(r); } catch (err) { errToast(err); } };
+    bindRows($('#dl'), rows, edit);
   },
   async brand(el) {
     const B = Object.assign({}, S.brand);
     el.innerHTML = `<div class="card" style="max-width:720px"><form id="bf" class="fgrid">
-      <div class="full img-up mb"><img id="lgimg" src="${B.logo_id ? '/f/' + B.logo_id : 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'}"><div><input type="file" accept="image/*" id="lgf"><div class="small muted">Square logo works best</div></div></div>
+      <div class="full img-up mb"><img id="lgimg" src="${B.logo_id ? '/f/' + B.logo_id : 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'}"><div style="min-width:0;flex:1"><input type="file" accept="image/*" id="lgf"><div class="small muted">Square logo works best</div></div></div>
       <label class="f"><span>Brand / platform name</span><input name="name" value="${esc(B.name)}"></label><label class="f"><span>Brand color</span><input name="color" type="color" value="${esc(B.color || '#0f766e')}" style="height:40px"></label>
       <label class="f full"><span>Tagline</span><input name="tagline" value="${esc(B.tagline || '')}"></label>
       <label class="f"><span>Support phone</span><input name="phone" value="${esc(B.phone || '')}"></label><label class="f"><span>Support email</span><input name="email" value="${esc(B.email || '')}"></label>
